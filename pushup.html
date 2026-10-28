@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PushPro AI — Smart Push-Up Detector & Streak Tracker</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- MediaPipe Pose & Drawing Utils -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap');
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #070A12;
+      color: #F8FAFC;
+      overflow-x: hidden;
+    }
+
+    .font-mono-num {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .glass-card {
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .rep-pulse {
+      animation: repPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes repPop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.22); color: #10B981; }
+      100% { transform: scale(1); }
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0B0F19; }
+    ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <!-- Brand -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+          <i data-lucide="activity" class="w-6 h-6 text-slate-950 stroke-[2.5]"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-extrabold tracking-tight text-white">PushPro <span class="text-emerald-400">AI</span></h1>
+            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Pose v2.4</span>
+          </div>
+          <p class="text-xs text-slate-400">Real-Time Biomechanical Push-Up Detector & Streak Engine</p>
+        </div>
+      </div>
+
+      <!-- Streak & Top KPIs -->
+      <div class="flex items-center gap-3">
+        <!-- Active Streak Pill -->
+        <div class="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500/15 to-amber-500/10 border border-orange-500/30">
+          <i data-lucide="flame" class="w-5 h-5 text-orange-400 fill-orange-400"></i>
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-orange-300/80 font-semibold leading-none">Current Streak</div>
+            <div class="text-sm font-extrabold text-white font-mono-num"><span id="headerStreak">0</span> Days</div>
+          </div>
+        </div>
+
+        <!-- Daily Goal Pill -->
+        <div class="hidden sm:flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-800">
+          <i data-lucide="target" class="w-5 h-5 text-cyan-400"></i>
+          <div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Today's Goal</div>
+            <div class="text-sm font-extrabold text-white font-mono-num">
+              <span id="headerTodayReps">0</span> / <span id="headerGoalTarget">50</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio Feedback Toggle -->
+        <button id="voiceToggleBtn" onclick="toggleVoice()" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 transition" title="Toggle Voice & Audio Coaching">
+          <i data-lucide="volume-2" id="voiceIcon" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT / CENTER COLUMN: AI VISION VIEWPORT & HUD (7 Cols) -->
+    <section class="lg:col-span-7 flex flex-col gap-5">
+
+      <!-- Mode Selector & Camera Controls -->
+      <div class="glass-card rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <button id="webcamModeBtn" onclick="startWebcamMode()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition">
+            <i data-lucide="camera" class="w-4 h-4"></i>
+            Start AI Camera
+          </button>
+          <button id="simModeBtn" onclick="startSimulationMode()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+            <i data-lucide="cpu" class="w-4 h-4 text-cyan-400"></i>
+            Demo Simulator
+          </button>
+          <button id="stopModeBtn" onclick="stopDetector()" class="hidden items-center gap-2 px-3.5 py-2.5 rounded-xl font-semibold text-sm bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition">
+            <i data-lucide="square" class="w-4 h-4"></i>
+            Stop
+          </button>
+        </div>
+
+        <!-- Timer & Session Actions -->
+        <div class="flex items-center gap-3 ml-auto">
+          <div class="px-3 py-1.5 rounded-lg bg-slate-950/90 border border-slate-800 font-mono-num text-sm text-slate-300 flex items-center gap-1.5">
+            <i data-lucide="timer" class="w-4 h-4 text-emerald-400"></i>
+            <span id="sessionTimer">00:00</span>
+          </div>
+          <button onclick="manualAddRep()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition" title="Manual +1 Rep">
+            +1 Rep
+          </button>
+        </div>
+      </div>
+
+      <!-- AI CAMERA / SKELETON CANVAS CONTAINER -->
+      <div class="relative rounded-3xl overflow-hidden bg-slate-950 border-2 border-slate-800/90 shadow-2xl aspect-video flex items-center justify-center">
+        <!-- Hidden Raw Video Element for MediaPipe -->
+        <video id="inputVideo" class="hidden" playsinline></video>
+
+        <!-- Output Canvas for Video + Pose Landmarks -->
+        <canvas id="outputCanvas" width="960" height="540" class="w-full h-full object-cover"></canvas>
+
+        <!-- Idle Overlay when Camera/Sim is Off -->
+        <div id="idleOverlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10">
+          <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
+            <i data-lucide="scan-line" class="w-8 h-8 text-emerald-400"></i>
+          </div>
+          <h2 class="text-xl font-bold text-white mb-2">Ready to Scan Your Push-Ups</h2>
+          <p class="text-sm text-slate-400 max-w-md mb-6">
+            Place your device on the floor or desk so your upper body (shoulders, elbows, wrists, and hips) is visible in a side or 45° angle profile.
+          </p>
+          <div class="flex flex-wrap justify-center gap-3">
+            <button onclick="startWebcamMode()" class="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition">
+              <i data-lucide="video" class="w-4 h-4"></i>
+              Enable Webcam Scanner
+            </button>
+            <button onclick="startSimulationMode()" class="flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition">
+              <i data-lucide="play" class="w-4 h-4 text-cyan-400"></i>
+              Try Interactive AI Simulator
+            </button>
+          </div>
+        </div>
+
+        <!-- TOP-LEFT HUD: LIVE POSE STATUS & FORM BADGE -->
+        <div class="absolute top-4 left-4 z-20 flex flex-col gap-2 pointer-events-none">
+          <div id="formBadge" class="px-3.5 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2 shadow-lg">
+            <span id="formStatusDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            <span id="formFeedbackText">Standby — Awaiting Pose</span>
+          </div>
+
+          <div class="px-3 py-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-800 text-[11px] font-mono-num text-slate-300 flex items-center gap-3">
+            <span>ELBOW: <strong id="hudElbowAngle" class="text-emerald-400">--°</strong></span>
+            <span>HIP: <strong id="hudHipAngle" class="text-cyan-400">--°</strong></span>
+            <span>STATE: <strong id="hudState" class="text-amber-400">IDLE</strong></span>
+          </div>
+        </div>
+
+        <!-- RIGHT SIDE HUD: VERTICAL DEPTH GAUGE -->
+        <div class="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-2 bg-slate-950/85 backdrop-blur-md p-2.5 rounded-2xl border border-slate-800">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Depth</span>
+          <div class="w-3.5 h-36 bg-slate-800 rounded-full overflow-hidden flex flex-col justify-end p-0.5">
+            <div id="depthGaugeFill" class="w-full bg-gradient-to-t from-emerald-500 to-cyan-400 rounded-full transition-all duration-75" style="height: 0%"></div>
+          </div>
+          <span id="depthPercentText" class="text-[11px] font-mono-num font-bold text-emerald-400">0%</span>
+        </div>
+
+        <!-- BOTTOM-LEFT HUD: SIMULATOR CONTROLS (VISIBLE IN SIMULATOR MODE) -->
+        <div id="simControlsHud" class="hidden absolute bottom-4 left-4 z-20 bg-slate-900/90 backdrop-blur-md border border-cyan-500/30 rounded-xl px-3.5 py-2 flex items-center gap-3">
+          <span class="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
+            <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Sim Speed:
+          </span>
+          <input id="simSpeedSlider" type="range" min="0.5" max="2.5" step="0.25" value="1.25" class="w-24 accent-cyan-400 cursor-pointer" />
+        </div>
+      </div>
+
+      <!-- BIG LIVE COUNTER & FINISH WORKOUT BAR -->
+      <div class="glass-card rounded-3xl p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
+        <!-- Giant Rep Display -->
+        <div class="sm:col-span-5 flex items-center gap-5 border-b sm:border-b-0 sm:border-r border-slate-800 pb-4 sm:pb-0 sm:pr-5">
+          <div class="flex flex-col">
+            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Current Set Reps</span>
+            <div id="liveRepCount" class="text-6xl sm:text-7xl font-black font-mono-num text-white leading-none mt-1">0</div>
+          </div>
+          <div class="flex flex-col gap-1.5 ml-auto">
+            <div class="text-xs text-slate-400">Est. Burn</div>
+            <div class="text-base font-bold font-mono-num text-emerald-400"><span id="liveCalories">0.0</span> kcal</div>
+            <div class="text-xs text-slate-400 mt-1">Avg Form</div>
+            <div class="text-base font-bold font-mono-num text-cyan-400"><span id="liveFormScore">100</span>%</div>
+          </div>
+        </div>
+
+        <!-- Save & Log Controls -->
+        <div class="sm:col-span-7 flex flex-col gap-3">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <span>Workout Note / Tag</span>
+            <span id="sessionFeedbackHint" class="text-emerald-400 font-medium">Ready to log session</span>
+          </div>
+          <div class="flex flex-wrap sm:flex-nowrap gap-2.5">
+            <input id="workoutNoteInput" type="text" placeholder="e.g., Morning chest set, standard width..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+            <button onclick="saveWorkoutSession()" class="w-full sm:w-auto whitespace-nowrap px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition">
+              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+              Save & Log Set
+            </button>
+            <button onclick="resetCurrentSet()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition" title="Reset Current Counter">
+              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT COLUMN: STREAK ENGINE, HEATMAP & WORKOUT LOGS (5 Cols) -->
+    <aside class="lg:col-span-5 flex flex-col gap-5">
+
+      <!-- STREAK & CONSISTENCY CARD -->
+      <div class="glass-card rounded-3xl p-5 sm:p-6 flex flex-col gap-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i data-lucide="flame" class="w-5 h-5 text-orange-400"></i>
+              Streak & Consistency Engine
+            </h2>
+            <p class="text-xs text-slate-400">Complete at least 1 logged set daily to build your streak</p>
+          </div>
+          <button onclick="openGoalModal()" class="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+            <i data-lucide="settings-2" class="w-3.5 h-3.5"></i> Set Goal
+          </button>
+        </div>
+
+        <!-- 4 Summary Stat Tiles -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+            <div class="text-[11px] text-slate-400 font-medium">Active Streak</div>
+            <div class="text-xl font-black font-mono-num text-orange-400 mt-0.5"><span id="statCurrentStreak">0</span>d</div>
+          </div>
+          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+            <div class="text-[11px] text-slate-400 font-medium">Best Streak</div>
+            <div class="text-xl font-black font-mono-num text-amber-300 mt-0.5"><span id="statBestStreak">0</span>d</div>
+          </div>
+          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+            <div class="text-[11px] text-slate-400 font-medium">Total Reps</div>
+            <div class="text-xl font-black font-mono-num text-emerald-400 mt-0.5" id="statTotalReps">0</div>
+          </div>
+          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
+            <div class="text-[11px] text-slate-400 font-medium">Personal Best</div>
+            <div class="text-xl font-black font-mono-num text-cyan-400 mt-0.5"><span id="statMaxSet">0</span></div>
+          </div>
+        </div>
+
+        <!-- Daily Goal Progress Bar -->
+        <div class="p-4 rounded-2xl bg-slate-900/70 border border-slate-800/80 flex flex-col gap-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-slate-200">Daily Target Progress</span>
+            <span class="font-mono-num font-bold text-emerald-400" id="goalProgressLabel">0 / 50 reps (0%)</span>
+          </div>
+          <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="goalProgressBar" class="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- 7-Day Activity Strip & Bar Chart -->
+        <div>
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Last 7 Days Activity</span>
+            <span class="text-[11px] text-slate-400">Reps per day</span>
+          </div>
+          <div id="weeklyChartContainer" class="grid grid-cols-7 gap-2 pt-2">
+            <!-- Dynamically populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- WORKOUT LOG HISTORY CARD -->
+      <div class="glass-card rounded-3xl p-5 sm:p-6 flex-1 flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i data-lucide="clipboard-list" class="w-5 h-5 text-emerald-400"></i>
+              Workout Log History
+            </h2>
+            <p class="text-xs text-slate-400">Timestamped sets with form accuracy & duration</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="exportLogsCSV()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 flex items-center gap-1 transition" title="Export CSV">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
+            </button>
+            <button onclick="clearAllLogs()" class="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-300 border border-rose-500/20 transition" title="Clear History">
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Scrollable Log List -->
+        <div id="workoutLogList" class="flex flex-col gap-2.5 max-h-[340px] overflow-y-auto pr-1">
+          <!-- Dynamically populated by JS -->
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- DAILY GOAL MODAL -->
+  <div id="goalModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card rounded-2xl max-w-sm w-full p-6 border border-slate-700 shadow-2xl">
+      <h3 class="text-lg font-bold text-white mb-1">Set Daily Push-Up Target</h3>
+      <p class="text-xs text-slate-400 mb-4">Your daily progress ring and streak tracker will calibrate to this goal.</p>
+      <input id="goalInput" type="number" min="5" max="1000" step="5" value="50" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono-num text-lg mb-4 focus:outline-none focus:border-emerald-500" />
+      <div class="flex justify-end gap-2">
+        <button onclick="closeGoalModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold">Cancel</button>
+        <button onclick="saveDailyGoal()" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-bold">Save Target</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLICATION JAVASCRIPT -->
+  <script>
+    /**************************************************************
+     * 1. STATE & STORAGE ENGINE
+     **************************************************************/
+    const STORAGE_KEY_LOGS = 'pushpro_ai_workout_logs_v1';
+    const STORAGE_KEY_GOAL = 'pushpro_ai_daily_goal_v1';
+
+    let currentReps = 0;
+    let pushupStage = 'UP'; // 'UP' or 'DOWN'
+    let reachedBottomDepth = false;
+    let angleHistory = [];
+    let formScores = [];
+
+    let detectorMode = 'IDLE'; // 'IDLE' | 'WEBCAM' | 'SIMULATION'
+    let voiceEnabled = true;
+    let cameraInstance = null;
+    let poseInstance = null;
+    let simAnimationId = null;
+    let simPhase = 0;
+
+    // Session Timer
+    let sessionSeconds = 0;
+    let timerInterval = null;
+
+    // Audio Context for synth beeps
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+      }
+    }
+
+    function playBeep(freq = 880, duration = 0.12, type = 'sine') {
+      if (!voiceEnabled) return;
+      try {
+        initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    function speakText(text) {
+      if (!voiceEnabled || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.15;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function toggleVoice() {
+      voiceEnabled = !voiceEnabled;
+      const btn = document.getElementById('voiceToggleBtn');
+      const icon = document.getElementById('voiceIcon');
+      if (voiceEnabled) {
+        btn.classList.replace('text-slate-500', 'text-emerald-400');
+        icon.setAttribute('data-lucide', 'volume-2');
+      } else {
+        btn.classList.replace('text-emerald-400', 'text-slate-500');
+        icon.setAttribute('data-lucide', 'volume-x');
+      }
+      lucide.createIcons();
+    }
+
+    /**************************************************************
+     * 2. BIOMECHANICAL ANGLE COMPUTATION & REP COUNTER
+     **************************************************************/
+    function calculateAngle(a, b, c) {
+      const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+      let angle = Math.abs((radians * 180.0) / Math.PI);
+      if (angle > 180.0) angle = 360.0 - angle;
+      return angle;
+    }
+
+    function processBiomechanics(rawElbowAngle, rawHipAngle) {
+      // 3-frame moving average smoothing
+      angleHistory.push(rawElbowAngle);
+      if (angleHistory.length > 3) angleHistory.shift();
+      const elbowAngle = Math.round(angleHistory.reduce((a, b) => a + b, 0) / angleHistory.length);
+      const hipAngle = Math.round(rawHipAngle);
+
+      // Update HUD numbers
+      document.getElementById('hudElbowAngle').textContent = `${elbowAngle}°`;
+      document.getElementById('hudHipAngle').textContent = `${hipAngle}°`;
+
+      // Calculate Depth Percentage (165 deg = 0%, 85 deg = 100%)
+      const clampedDepth = Math.max(0, Math.min(100, Math.round(((165 - elbowAngle) / (165 - 85)) * 100)));
+      document.getElementById('depthGaugeFill').style.height = `${clampedDepth}%`;
+      document.getElementById('depthPercentText').textContent = `${clampedDepth}%`;
+
+      // Check Core Plank Alignment
+      const isPlankAligned = hipAngle >= 150 && hipAngle <= 200;
+      const formDot = document.getElementById('formStatusDot');
+      const formText = document.getElementById('formFeedbackText');
+
+      if (!isPlankAligned) {
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping';
+        formText.textContent = 'Fix Form: Keep Back & Hips Straight!';
+      } else if (elbowAngle <= 92) {
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+        formText.textContent = 'Great Depth! Drive Up Now';
+      } else if (pushupStage === 'DOWN' && elbowAngle < 130) {
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+        formText.textContent = 'Lower Chest to 90° Elbow Angle';
+      } else {
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
+        formText.textContent = 'Good Plank Alignment — Ready';
+      }
+
+      // Hysteresis State Machine
+      // Transition UP -> DOWN
+      if (elbowAngle <= 92 && pushupStage === 'UP') {
+        pushupStage = 'DOWN';
+        reachedBottomDepth = true;
+        document.getElementById('hudState').textContent = 'DOWN (90°)';
+        playBeep(540, 0.08, 'triangle');
+        // Record form score for this rep based on hip alignment & depth
+        const repForm = isPlankAligned ? Math.min(100, 90 + Math.max(0, 92 - elbowAngle)) : 70;
+        formScores.push(repForm);
+      }
+
+      // Transition DOWN -> UP (Rep Completed)
+      if (elbowAngle >= 158 && pushupStage === 'DOWN' && reachedBottomDepth) {
+        pushupStage = 'UP';
+        reachedBottomDepth = false;
+        document.getElementById('hudState').textContent = 'UP (LOCK)';
+        incrementRepCounter();
+      }
+    }
+
+    function incrementRepCounter() {
+      currentReps++;
+      const repEl = document.getElementById('liveRepCount');
+      repEl.textContent = currentReps;
+      repEl.classList.remove('rep-pulse');
+      void repEl.offsetWidth; // trigger reflow
+      repEl.classList.add('rep-pulse');
+
+      // Update Calories (~0.32 kcal per push-up) & Form Score
+      document.getElementById('liveCalories').textContent = (currentReps * 0.32).toFixed(1);
+      const avgForm = formScores.length
+        ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
+        : 98;
+      document.getElementById('liveFormScore').textContent = avgForm;
+
+      playBeep(980, 0.15, 'sine');
+      speakText(String(currentReps));
+    }
+
+    function manualAddRep() {
+      if (!timerInterval) startSessionTimer();
+      formScores.push(95);
+      incrementRepCounter();
+    }
+
+    function resetCurrentSet() {
+      currentReps = 0;
+      pushupStage = 'UP';
+      reachedBottomDepth = false;
+      formScores = [];
+      sessionSeconds = 0;
+      document.getElementById('liveRepCount').textContent = '0';
+      document.getElementById('liveCalories').textContent = '0.0';
+      document.getElementById('liveFormScore').textContent = '100';
+      document.getElementById('sessionTimer').textContent = '00:00';
+    }
+
+    /**************************************************************
+     * 3. TIMER ENGINE
+     **************************************************************/
+    function startSessionTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        sessionSeconds++;
+        const mins = String(Math.floor(sessionSeconds / 60)).padStart(2, '0');
+        const secs = String(sessionSeconds % 60).padStart(2, '0');
+        document.getElementById('sessionTimer').textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopSessionTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+
+    /**************************************************************
+     * 4. MEDIAPIPE WEBCAM POSE DETECTION
+     **************************************************************/
+    async function startWebcamMode() {
+      stopDetector();
+      detectorMode = 'WEBCAM';
+      document.getElementById('idleOverlay').classList.add('hidden');
+      document.getElementById('stopModeBtn').classList.replace('hidden', 'flex');
+      document.getElementById('simControlsHud').classList.add('hidden');
+      startSessionTimer();
+
+      const videoElement = document.getElementById('inputVideo');
+      const canvasElement = document.getElementById('outputCanvas');
+      const canvasCtx = canvasElement.getContext('2d');
+
+      try {
+        poseInstance = new Pose({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        poseInstance.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          minDetectionConfidence: 0.55,
+          minTrackingConfidence: 0.55
+        });
+
+        poseInstance.onResults((results) => {
+          if (detectorMode !== 'WEBCAM') return;
+
+          canvasCtx.save();
+          canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+          canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+          if (results.poseLandmarks) {
+            // Draw Skeleton
+            drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
+              color: '#10B981',
+              lineWidth: 4
+            });
+            drawLandmarks(canvasCtx, results.poseLandmarks, {
+              color: '#22D3EE',
+              lineWidth: 2,
+              radius: 5
+            });
+
+            // Pick side with higher visibility (Left: 11,13,15,23,27 | Right: 12,14,16,24,28)
+            const lm = results.poseLandmarks;
+            const useLeft = (lm[13]?.visibility || 0) >= (lm[14]?.visibility || 0);
+
+            const shoulder = useLeft ? lm[11] : lm[12];
+            const elbow = useLeft ? lm[13] : lm[14];
+            const wrist = useLeft ? lm[15] : lm[16];
+            const hip = useLeft ? lm[23] : lm[24];
+            const ankle = useLeft ? lm[27] : lm[28];
+
+            if (shoulder && elbow && wrist && hip && ankle) {
+              const elbowAngle = calculateAngle(shoulder, elbow, wrist);
+              const hipAngle = calculateAngle(shoulder, hip, ankle);
+
+              // Draw live angle callout near elbow
+              const ex = elbow.x * canvasElement.width;
+              const ey = elbow.y * canvasElement.height;
+              canvasCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+              canvasCtx.fillRect(ex + 10, ey - 28, 68, 28);
+              canvasCtx.fillStyle = '#10B981';
+              canvasCtx.font = 'bold 16px JetBrains Mono';
+              canvasCtx.fillText(`${Math.round(elbowAngle)}°`, ex + 18, ey - 9);
+
+              processBiomechanics(elbowAngle, hipAngle);
+            }
+          }
+          canvasCtx.restore();
+        });
+
+        cameraInstance = new Camera(videoElement, {
+          onFrame: async () => {
+            if (poseInstance && detectorMode === 'WEBCAM') {
+              await poseInstance.send({ image: videoElement });
+            }
+          },
+          width: 960,
+          height: 540
+        });
+
+        await cameraInstance.start();
+      } catch (err) {
+        alert('Camera access failed or was denied. Switching to Interactive AI Simulator mode so you can test the push-up detector!');
+        startSimulationMode();
+      }
+    }
+
+    /**************************************************************
+     * 5. INTERACTIVE AI BIOMECHANICAL SIMULATOR MODE
+     **************************************************************/
+    function startSimulationMode() {
+      stopDetector();
+      detectorMode = 'SIMULATION';
+      document.getElementById('idleOverlay').classList.add('hidden');
+      document.getElementById('stopModeBtn').classList.replace('hidden', 'flex');
+      document.getElementById('simControlsHud').classList.remove('hidden');
+      startSessionTimer();
+
+      const canvas = document.getElementById('outputCanvas');
+      const ctx = canvas.getContext('2d');
+
+      function renderSimFrame() {
+        if (detectorMode !== 'SIMULATION') return;
+
+        const speed = parseFloat(document.getElementById('simSpeedSlider').value || 1.25);
+        simPhase += 0.032 * speed;
+
+        // Clear & Draw Cyber Grid Floor
+        ctx.fillStyle = '#090D16';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = 'rgba(30, 41, 59, 0.6)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 48) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 48) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+
+        // Ground Floor Line
+        const floorY = 430;
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(100, floorY);
+        ctx.lineTo(860, floorY);
+        ctx.stroke();
+
+        // Oscillate push-up depth (0 = top plank, 1 = bottom push-up)
+        const depthFactor = (Math.sin(simPhase - Math.PI / 2) + 1) / 2;
+
+        // Kinematic coordinates in side profile
+        const ankle = { x: 230, y: floorY - 18 };
+        const wrist = { x: 690, y: floorY - 12 };
+
+        // Shoulder moves down as depthFactor increases
+        const shoulder = {
+          x: 675,
+          y: 235 + depthFactor * 125
+        };
+
+        // Hip interpolates between ankle and shoulder
+        const hip = {
+          x: (ankle.x + shoulder.x) / 2,
+          y: (ankle.y + shoulder.y) / 2 - 4
+        };
+
+        // Elbow bends outward/backward during descent
+        const elbow = {
+          x: 682 - Math.sin(depthFactor * Math.PI * 0.65) * 78,
+          y: (shoulder.y + wrist.y) / 2 + 12
+        };
+
+        const head = {
+          x: shoulder.x + 55,
+          y: shoulder.y - 18
+        };
+
+        // Draw Body Segments
+        const segments = [
+          [ankle, hip],
+          [hip, shoulder],
+          [shoulder, elbow],
+          [elbow, wrist]
+        ];
+
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 8;
+        ctx.strokeStyle = '#10B981';
+        segments.forEach(([p1, p2]) => {
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        });
+
+        // Draw Head
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, 24, 0, Math.PI * 2);
+        ctx.fillStyle = '#0F172A';
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#22D3EE';
+        ctx.stroke();
+
+        // Draw Landmarks
+        [ankle, hip, shoulder, elbow, wrist].forEach((pt) => {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2);
+          ctx.fillStyle = '#22D3EE';
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#090D16';
+          ctx.stroke();
+        });
+
+        // Compute real angles from simulated coordinates
+        const elbowAngle = calculateAngle(shoulder, elbow, wrist);
+        const hipAngle = calculateAngle(shoulder, hip, ankle);
+
+        // Render Live Elbow Angle Tag on Canvas
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.fillRect(elbow.x - 85, elbow.y - 20, 70, 30);
+        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(elbow.x - 85, elbow.y - 20, 70, 30);
+        ctx.fillStyle = '#10B981';
+        ctx.font = 'bold 16px JetBrains Mono';
+        ctx.fillText(`${Math.round(elbowAngle)}°`, elbow.x - 73, elbow.y + 1);
+
+        processBiomechanics(elbowAngle, hipAngle);
+
+        simAnimationId = requestAnimationFrame(renderSimFrame);
+      }
+
+      simAnimationId = requestAnimationFrame(renderSimFrame);
+    }
+
+    function stopDetector() {
+      detectorMode = 'IDLE';
+      stopSessionTimer();
+
+      if (simAnimationId) {
+        cancelAnimationFrame(simAnimationId);
+        simAnimationId = null;
+      }
+      if (cameraInstance) {
+        try { cameraInstance.stop(); } catch (e) {}
+        cameraInstance = null;
+      }
+
+      document.getElementById('idleOverlay').classList.remove('hidden');
+      document.getElementById('stopModeBtn').classList.replace('flex', 'hidden');
+      document.getElementById('simControlsHud').classList.add('hidden');
+      document.getElementById('hudState').textContent = 'IDLE';
+    }
+
+    /**************************************************************
+     * 6. WORKOUT LOGGING & STREAK ENGINE
+     **************************************************************/
+    function getLocalDateKey(dateObj = new Date()) {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function getWorkoutLogs() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_LOGS);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return seedSampleLogsIfEmpty();
+    }
+
+    function seedSampleLogsIfEmpty() {
+      // Seed 3 past days so the user immediately sees an active streak & chart
+      const now = new Date();
+      const d1 = new Date(now); d1.setDate(now.getDate() - 1);
+      const d2 = new Date(now); d2.setDate(now.getDate() - 2);
+      const d3 = new Date(now); d3.setDate(now.getDate() - 3);
+
+      const initialLogs = [
+        {
+          id: 'seed-1',
+          dateKey: getLocalDateKey(d1),
+          timestamp: d1.toISOString(),
+          reps: 35,
+          durationSec: 78,
+          calories: 11.2,
+          formScore: 96,
+          note: 'Evening endurance set'
+        },
+        {
+          id: 'seed-2',
+          dateKey: getLocalDateKey(d2),
+          timestamp: d2.toISOString(),
+          reps: 30,
+          durationSec: 65,
+          calories: 9.6,
+          formScore: 94,
+          note: 'Standard plank push-ups'
+        },
+        {
+          id: 'seed-3',
+          dateKey: getLocalDateKey(d3),
+          timestamp: d3.toISOString(),
+          reps: 25,
+          durationSec: 55,
+          calories: 8.0,
+          formScore: 92,
+          note: 'Warmup AI calibration set'
+        }
+      ];
+      localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(initialLogs));
+      return initialLogs;
+    }
+
+    function saveWorkoutSession() {
+      if (currentReps <= 0) {
+        alert('Complete at least 1 push-up (using the AI camera, simulator, or +1 Rep button) before saving a set!');
+        return;
+      }
+
+      const logs = getWorkoutLogs();
+      const noteInput = document.getElementById('workoutNoteInput');
+      const avgForm = formScores.length
+        ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
+        : 98;
+
+      const newEntry = {
+        id: 'set-' + Date.now(),
+        dateKey: getLocalDateKey(new Date()),
+        timestamp: new Date().toISOString(),
+        reps: currentReps,
+        durationSec: Math.max(1, sessionSeconds),
+        calories: parseFloat((currentReps * 0.32).toFixed(1)),
+        formScore: avgForm,
+        note: noteInput.value.trim() || 'AI Verified Push-Up Set'
+      };
+
+      logs.unshift(newEntry);
+      localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
+
+      // Feedback
+      playBeep(1120, 0.2, 'sine');
+      speakText(`Workout saved. ${currentReps} push-ups logged.`);
+      noteInput.value = '';
+      document.getElementById('sessionFeedbackHint').textContent = `Saved ${currentReps} reps!`;
+
+      resetCurrentSet();
+      renderDashboard();
+    }
+
+    function computeStreakStats(logs) {
+      const uniqueDays = Array.from(new Set(logs.map((l) => l.dateKey))).sort().reverse();
+      if (uniqueDays.length === 0) return { currentStreak: 0, bestStreak: 0 };
+
+      const todayKey = getLocalDateKey(new Date());
+      const yesterdayDate = new Date();
+      yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+      const yesterdayKey = getLocalDateKey(yesterdayDate);
+
+      // Calculate Current Streak
+      let currentStreak = 0;
+      let checkDate = new Date();
+
+      if (!uniqueDays.includes(todayKey)) {
+        if (uniqueDays.includes(yesterdayKey)) {
+          checkDate = yesterdayDate;
+        } else {
+          currentStreak = 0;
+        }
+      }
+
+      if (uniqueDays.includes(todayKey) || uniqueDays.includes(yesterdayKey)) {
+        while (true) {
+          const key = getLocalDateKey(checkDate);
+          if (uniqueDays.includes(key)) {
+            currentStreak++;
+            checkDate.setDate(checkDate.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+      }
+
+      // Calculate Best Streak
+      const ascDays = [...uniqueDays].sort();
+      let bestStreak = 0;
+      let tempStreak = 0;
+      let prevDate = null;
+
+      ascDays.forEach((dStr) => {
+        const curr = new Date(dStr + 'T00:00:00');
+        if (!prevDate) {
+          tempStreak = 1;
+        } else {
+          const diffDays = Math.round((curr - prevDate) / (1000 * 60 * 60 * 24));
+          tempStreak = diffDays === 1 ? tempStreak + 1 : 1;
+        }
+        if (tempStreak > bestStreak) bestStreak = tempStreak;
+        prevDate = curr;
+      });
+
+      return { currentStreak, bestStreak };
+    }
+
+    /**************************************************************
+     * 7. RENDER DASHBOARD, HEATMAP & LOG LIST
+     **************************************************************/
+    function getDailyGoal() {
+      return parseInt(localStorage.getItem(STORAGE_KEY_GOAL) || '50', 10);
+    }
+
+    function renderDashboard() {
+      const logs = getWorkoutLogs();
+      const goal = getDailyGoal();
+      const todayKey = getLocalDateKey(new Date());
+
+      // Aggregate KPIs
+      const totalReps = logs.reduce((sum, item) => sum + item.reps, 0);
+      const maxSet = logs.reduce((max, item) => Math.max(max, item.reps), 0);
+      const todayReps = logs
+        .filter((item) => item.dateKey === todayKey)
+        .reduce((sum, item) => sum + item.reps, 0);
+
+      const { currentStreak, bestStreak } = computeStreakStats(logs);
+
+      // Header & Tile updates
+      document.getElementById('headerStreak').textContent = currentStreak;
+      document.getElementById('headerTodayReps').textContent = todayReps;
+      document.getElementById('headerGoalTarget').textContent = goal;
+
+      document.getElementById('statCurrentStreak').textContent = currentStreak;
+      document.getElementById('statBestStreak').textContent = bestStreak;
+      document.getElementById('statTotalReps').textContent = totalReps.toLocaleString();
+      document.getElementById('statMaxSet').textContent = maxSet;
+
+      // Goal Progress Bar
+      const pct = Math.min(100, Math.round((todayReps / goal) * 100));
+      document.getElementById('goalProgressLabel').textContent = `${todayReps} / ${goal} reps (${pct}%)`;
+      document.getElementById('goalProgressBar').style.width = `${pct}%`;
+
+      // Render 7-Day Activity Chart
+      renderWeeklyChart(logs, goal);
+
+      // Render Log History List
+      renderLogList(logs);
+    }
+
+    function renderWeeklyChart(logs, goal) {
+      const container = document.getElementById('weeklyChartContainer');
+      container.innerHTML = '';
+
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const daysData = [];
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = getLocalDateKey(d);
+        const reps = logs
+          .filter((l) => l.dateKey === key)
+          .reduce((sum, l) => sum + l.reps, 0);
+        daysData.push({
+          label: i === 0 ? 'Today' : dayNames[d.getDay()],
+          reps,
+          isToday: i === 0
+        });
+      }
+
+      const maxBar = Math.max(goal, ...daysData.map((d) => d.reps), 10);
+
+      daysData.forEach((day) => {
+        const heightPct = Math.max(8, Math.round((day.reps / maxBar) * 100));
+        const activeColor = day.reps >= goal
+          ? 'bg-gradient-to-t from-emerald-500 to-cyan-400'
+          : day.reps > 0
+          ? 'bg-emerald-500/60'
+          : 'bg-slate-800';
+
+        const col = document.createElement('div');
+        col.className = 'flex flex-col items-center gap-1.5';
+        col.innerHTML = `
+          <div class="text-[10px] font-mono-num font-bold ${day.reps > 0 ? 'text-emerald-400' : 'text-slate-500'}">${day.reps}</div>
+          <div class="w-full h-24 bg-slate-900/90 rounded-xl border border-slate-800/80 p-1 flex items-end">
+            <div class="w-full rounded-lg transition-all duration-500 ${activeColor}" style="height: ${heightPct}%"></div>
+          </div>
+          <div class="text-[10px] font-semibold ${day.isToday ? 'text-white' : 'text-slate-400'}">${day.label}</div>
+        `;
+        container.appendChild(col);
+      });
+    }
+
+    function renderLogList(logs) {
+      const listEl = document.getElementById('workoutLogList');
+      listEl.innerHTML = '';
+
+      if (logs.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-center py-8 text-xs text-slate-500">
+            No sets logged yet. Start the detector or click +1 Rep to log your first set!
+          </div>
+        `;
+        return;
+      }
+
+      logs.forEach((item) => {
+        const dateObj = new Date(item.timestamp);
+        const timeStr = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+          ' • ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const row = document.createElement('div');
+        row.className = 'p-3.5 rounded-2xl bg-slate-900/85 border border-slate-800/90 flex items-center justify-between gap-3 hover:border-slate-700 transition';
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col items-center justify-center font-mono-num">
+              <span class="text-sm font-black text-emerald-400 leading-none">${item.reps}</span>
+              <span class="text-[9px] uppercase text-emerald-300/70">Reps</span>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-white">${item.note}</div>
+              <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                <span>${timeStr}</span>
+                <span>•</span>
+                <span class="text-cyan-400 font-mono-num">${item.formScore}% Form</span>
+                <span>•</span>
+                <span class="font-mono-num">${item.calories} kcal</span>
+              </div>
+            </div>
+          </div>
+          <button onclick="deleteLogItem('${item.id}')" class="p-1.5 text-slate-500 hover:text-rose-400 transition" title="Delete entry">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        `;
+        listEl.appendChild(row);
+      });
+
+      lucide.createIcons();
+    }
+
+    function deleteLogItem(id) {
+      const logs = getWorkoutLogs().filter((item) => item.id !== id);
+      localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
+      renderDashboard();
+    }
+
+    function clearAllLogs() {
+      if (!confirm('Clear all workout logs and reset your streak?')) return;
+      localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify([]));
+      renderDashboard();
+    }
+
+    function exportLogsCSV() {
+      const logs = getWorkoutLogs();
+      if (!logs.length) return alert('No logs to export.');
+      const headers = ['Date', 'Timestamp', 'Reps', 'Duration(s)', 'Calories(kcal)', 'FormScore(%)', 'Note'];
+      const rows = logs.map((l) => [
+        l.dateKey,
+        l.timestamp,
+        l.reps,
+        l.durationSec,
+        l.calories,
+        l.formScore,
+        `"${(l.note || '').replace(/"/g, '""')}"`
+      ]);
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+      const link = document.createElement('a');
+      link.setAttribute('href', encodeURI(csvContent));
+      link.setAttribute('download', `pushpro_workout_logs_${getLocalDateKey()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    /**************************************************************
+     * 8. GOAL MODAL HANDLERS & INITIALIZATION
+     **************************************************************/
+    function openGoalModal() {
+      document.getElementById('goalInput').value = getDailyGoal();
+      document.getElementById('goalModal').classList.remove('hidden');
+    }
+
+    function closeGoalModal() {
+      document.getElementById('goalModal').classList.add('hidden');
+    }
+
+    function saveDailyGoal() {
+      const val = Math.max(5, parseInt(document.getElementById('goalInput').value || '50', 10));
+      localStorage.setItem(STORAGE_KEY_GOAL, String(val));
+      closeGoalModal();
+      renderDashboard();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      renderDashboard();
+    });
+  </script>
+</body>
+</html>
