@@ -2,8 +2,13 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PushPro AI — Smart Push-Up Detector & Streak Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PushPro AI" />
+  <meta name="theme-color" content="#000000" />
+  <title>PushPro AI — Apple Fitness+ Push-Up Detector & Rings</title>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- MediaPipe Pose & Drawing Utils -->
@@ -15,354 +20,514 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap');
+    :root {
+      /* Apple HIG Semantic Dark Mode Tokens */
+      --ios-bg-primary: #000000;
+      --ios-bg-elevated: #1C1C1E;
+      --ios-bg-secondary: #2C2C2E;
+      --ios-bg-tertiary: #3A3A3C;
+      --ios-separator: rgba(255, 255, 255, 0.12);
+
+      /* Apple Fitness+ Semantic Ring & Accent Tokens */
+      --fitness-move: #FA114F;
+      --fitness-exercise: #92E82A;
+      --fitness-stand: #00F5EA;
+      --ios-blue: #0A84FF;
+      --ios-green: #30D158;
+      --ios-orange: #FF9F0A;
+      --ios-red: #FF453A;
+    }
+
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
 
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: #070A12;
-      color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
+      background-color: var(--ios-bg-primary);
+      color: #FFFFFF;
       overflow-x: hidden;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: calc(84px + env(safe-area-inset-bottom, 16px));
     }
 
-    .font-mono-num {
-      font-family: 'JetBrains Mono', monospace;
+    @media (min-width: 1024px) {
+      body {
+        padding-bottom: 24px;
+      }
     }
 
-    .glass-card {
-      background: rgba(15, 23, 42, 0.78);
-      backdrop-filter: blur(16px);
+    /* Apple Tabular Numerals for zero jitter during live counting */
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
+      letter-spacing: -0.03em;
+    }
+
+    /* iOS 26 Liquid Glass Material */
+    .ios-glass {
+      background: rgba(28, 28, 30, 0.72);
+      backdrop-filter: saturate(190%) blur(24px);
+      -webkit-backdrop-filter: saturate(190%) blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .ios-hud-pill {
+      background: rgba(18, 18, 20, 0.68);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .ios-card {
+      background: var(--ios-bg-elevated);
+      border-radius: 24px;
       border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     }
 
-    .rep-pulse {
-      animation: repPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* Apple HIG Rule: 44x44pt minimum tap target + tactile spring feedback */
+    .ios-btn {
+      min-height: 44px;
+      min-width: 44px;
+      transition: transform 0.16s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.16s ease, background-color 0.2s ease;
+      user-select: none;
+    }
+    .ios-btn:active {
+      transform: scale(0.95);
+      opacity: 0.88;
     }
 
-    @keyframes repPop {
+    /* Rep Counter Spring Pop Animation */
+    .rep-pop {
+      animation: appleSpringPop 0.42s cubic-bezier(0.22, 1.35, 0.36, 1);
+    }
+    @keyframes appleSpringPop {
       0% { transform: scale(1); }
-      50% { transform: scale(1.22); color: #10B981; }
+      45% { transform: scale(1.24); color: #92E82A; }
       100% { transform: scale(1); }
     }
 
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0B0F19; }
-    ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 9999px; }
-    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    /* SVG Activity Ring Smooth Transitions */
+    .ring-progress {
+      transition: stroke-dashoffset 0.65s cubic-bezier(0.32, 0.72, 0, 1);
+      transform: rotate(-90deg);
+      transform-origin: 50% 50%;
+    }
+
+    /* Custom Subtle Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 9999px; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col antialiased selection:bg-[#92E82A] selection:text-black">
 
-  <!-- TOP NAVIGATION BAR -->
-  <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
-      <!-- Brand -->
+  <!-- TOP iOS NAVIGATION BAR (Translucent Sticky Header) -->
+  <header class="ios-glass sticky top-0 z-40 border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2">
+      <!-- Left: App Icon & Title -->
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-          <i data-lucide="activity" class="w-6 h-6 text-slate-950 stroke-[2.5]"></i>
+        <div class="w-10 h-10 rounded-[12px] bg-gradient-to-br from-[#92E82A] via-[#30D158] to-[#00F5EA] flex items-center justify-center shadow-lg shadow-[#30D158]/20">
+          <i data-lucide="activity" class="w-5 h-5 text-black stroke-[2.75]"></i>
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="text-lg font-extrabold tracking-tight text-white">PushPro <span class="text-emerald-400">AI</span></h1>
-            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Pose v2.4</span>
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
+              PushPro <span class="text-[#92E82A]">Fitness+</span>
+            </h1>
+            <span class="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#30D158]/15 text-[#30D158] border border-[#30D158]/30">
+              AI Pose
+            </span>
           </div>
-          <p class="text-xs text-slate-400">Real-Time Biomechanical Push-Up Detector & Streak Engine</p>
+          <p class="text-[11px] text-[#8E8E93] font-medium leading-none mt-0.5">Apple HIG Biomechanical Trainer</p>
         </div>
       </div>
 
-      <!-- Streak & Top KPIs -->
-      <div class="flex items-center gap-3">
-        <!-- Active Streak Pill -->
-        <div class="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500/15 to-amber-500/10 border border-orange-500/30">
-          <i data-lucide="flame" class="w-5 h-5 text-orange-400 fill-orange-400"></i>
-          <div>
-            <div class="text-[10px] uppercase tracking-wider text-orange-300/80 font-semibold leading-none">Current Streak</div>
-            <div class="text-sm font-extrabold text-white font-mono-num"><span id="headerStreak">0</span> Days</div>
-          </div>
+      <!-- Right: Streak Pill & Action Controls (All >= 44x44px hit targets) -->
+      <div class="flex items-center gap-2">
+        <!-- Live Streak Capsule -->
+        <div onclick="switchMobileTab('rings')" class="ios-btn cursor-pointer flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#2C2C2E]/90 border border-white/10">
+          <i data-lucide="flame" class="w-4 h-4 text-[#FF9F0A] fill-[#FF9F0A]"></i>
+          <span class="text-xs sm:text-sm font-bold tabular-nums text-white"><span id="headerStreak">0</span>d</span>
         </div>
 
-        <!-- Daily Goal Pill -->
-        <div class="hidden sm:flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-slate-800">
-          <i data-lucide="target" class="w-5 h-5 text-cyan-400"></i>
-          <div>
-            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Today's Goal</div>
-            <div class="text-sm font-extrabold text-white font-mono-num">
-              <span id="headerTodayReps">0</span> / <span id="headerGoalTarget">50</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Audio Feedback Toggle -->
-        <button id="voiceToggleBtn" onclick="toggleVoice()" class="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-emerald-400 transition" title="Toggle Voice & Audio Coaching">
+        <!-- Audio Coaching Button (44x44px) -->
+        <button id="voiceToggleBtn" onclick="toggleVoice()" class="ios-btn w-11 h-11 rounded-full bg-[#2C2C2E]/90 hover:bg-[#3A3A3C] border border-white/10 flex items-center justify-center text-[#92E82A]" title="Toggle Audio Coaching" aria-label="Toggle Audio Coaching">
           <i data-lucide="volume-2" id="voiceIcon" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Native iOS Share Sheet Button (44x44px) -->
+        <button onclick="shareAppWithFriend()" class="ios-btn h-11 px-3.5 rounded-full bg-[#0A84FF] hover:bg-[#0070E0] text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-[#0A84FF]/25" title="Share Workout & App">
+          <i data-lucide="share" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Share</span>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- MAIN WORKSPACE -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+  <!-- TOAST NOTIFICATION BANNER -->
+  <div id="shareToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 hidden ios-hud-pill px-4 py-2.5 rounded-full text-xs font-semibold text-white shadow-2xl items-center gap-2">
+    <i data-lucide="check-circle-2" class="w-4 h-4 text-[#30D158]"></i>
+    <span id="shareToastText">Copied to clipboard!</span>
+  </div>
 
-    <!-- LEFT / CENTER COLUMN: AI VISION VIEWPORT & HUD (7 Cols) -->
-    <section class="lg:col-span-7 flex flex-col gap-5">
+  <!-- MAIN RESPONSIVE BENTO WORKSPACE -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 py-4 sm:py-6 grid grid-cols-1 lg:grid-cols-12 gap-5">
 
-      <!-- Mode Selector & Camera Controls -->
-      <div class="glass-card rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <button id="webcamModeBtn" onclick="startWebcamMode()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 transition">
-            <i data-lucide="camera" class="w-4 h-4"></i>
-            Start AI Camera
+    <!-- =====================================================================
+         TAB 1 / LEFT COLUMN: LIVE AI CAMERA HUD & WORKOUT CONTROLS (7 Cols)
+         ===================================================================== -->
+    <section id="tabSectionWorkout" class="lg:col-span-7 flex flex-col gap-4">
+
+      <!-- iOS Segmented Mode Bar & Camera Controls -->
+      <div class="ios-card p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-1.5 flex-1 sm:flex-initial">
+          <button id="webcamModeBtn" onclick="startWebcamMode()" class="ios-btn flex-1 sm:flex-initial px-4 py-2.5 rounded-[14px] font-bold text-xs sm:text-sm bg-[#92E82A] text-black flex items-center justify-center gap-2 shadow-md">
+            <i data-lucide="camera" class="w-4 h-4 stroke-[2.5]"></i>
+            <span>AI Camera</span>
           </button>
-          <button id="simModeBtn" onclick="startSimulationMode()" class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
-            <i data-lucide="cpu" class="w-4 h-4 text-cyan-400"></i>
-            Demo Simulator
+
+          <button id="simModeBtn" onclick="startSimulationMode()" class="ios-btn flex-1 sm:flex-initial px-3.5 py-2.5 rounded-[14px] font-semibold text-xs sm:text-sm bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white flex items-center justify-center gap-1.5">
+            <i data-lucide="sparkles" class="w-4 h-4 text-[#00F5EA]"></i>
+            <span>Simulator</span>
           </button>
-          <button id="stopModeBtn" onclick="stopDetector()" class="hidden items-center gap-2 px-3.5 py-2.5 rounded-xl font-semibold text-sm bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition">
-            <i data-lucide="square" class="w-4 h-4"></i>
-            Stop
+
+          <button id="stopModeBtn" onclick="stopDetector()" class="hidden ios-btn px-3.5 py-2.5 rounded-[14px] font-semibold text-xs sm:text-sm bg-[#FF453A]/20 text-[#FF453A] border border-[#FF453A]/30 items-center justify-center gap-1.5">
+            <i data-lucide="square" class="w-4 h-4 fill-current"></i>
+            <span>Stop</span>
           </button>
         </div>
 
-        <!-- Timer & Session Actions -->
-        <div class="flex items-center gap-3 ml-auto">
-          <div class="px-3 py-1.5 rounded-lg bg-slate-950/90 border border-slate-800 font-mono-num text-sm text-slate-300 flex items-center gap-1.5">
-            <i data-lucide="timer" class="w-4 h-4 text-emerald-400"></i>
+        <!-- Right Controls: Flip Camera (Mobile Friendly) + Session Timer -->
+        <div class="flex items-center gap-2 ml-auto">
+          <button id="flipCameraBtn" onclick="flipCameraFacingMode()" class="ios-btn w-11 h-11 rounded-[14px] bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white flex items-center justify-center" title="Flip Front/Back Camera" aria-label="Flip Camera">
+            <i data-lucide="switch-camera" class="w-5 h-5 text-[#00F5EA]"></i>
+          </button>
+
+          <div class="h-11 px-3.5 rounded-[14px] bg-black/80 border border-white/10 flex items-center gap-2 tabular-nums text-xs sm:text-sm font-bold text-white">
+            <span class="w-2 h-2 rounded-full bg-[#30D158] animate-pulse"></span>
             <span id="sessionTimer">00:00</span>
           </div>
-          <button onclick="manualAddRep()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 border border-slate-700 transition" title="Manual +1 Rep">
-            +1 Rep
-          </button>
         </div>
       </div>
 
-      <!-- AI CAMERA / SKELETON CANVAS CONTAINER -->
-      <div class="relative rounded-3xl overflow-hidden bg-slate-950 border-2 border-slate-800/90 shadow-2xl aspect-video flex items-center justify-center">
-        <!-- Hidden Raw Video Element for MediaPipe -->
-        <video id="inputVideo" class="hidden" playsinline></video>
+      <!-- FULL-BLEED AI CAMERA & SKELETON VIEWPORT (Mobile Portrait Friendly + Desktop Widescreen) -->
+      <div class="relative rounded-[28px] overflow-hidden bg-black border border-white/15 shadow-2xl aspect-[4/5] sm:aspect-video flex items-center justify-center">
+        <!-- Hidden Video Element for MediaPipe -->
+        <video id="inputVideo" class="hidden" playsinline muted></video>
 
-        <!-- Output Canvas for Video + Pose Landmarks -->
+        <!-- Output Canvas -->
         <canvas id="outputCanvas" width="960" height="540" class="w-full h-full object-cover"></canvas>
 
-        <!-- Idle Overlay when Camera/Sim is Off -->
-        <div id="idleOverlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10">
-          <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
-            <i data-lucide="scan-line" class="w-8 h-8 text-emerald-400"></i>
+        <!-- STANDBY / ONBOARDING GLASS OVERLAY -->
+        <div id="idleOverlay" class="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-10">
+          <div class="w-16 h-16 rounded-[20px] bg-[#92E82A]/15 border border-[#92E82A]/40 flex items-center justify-center mb-4 shadow-lg shadow-[#92E82A]/10">
+            <i data-lucide="scan-face" class="w-8 h-8 text-[#92E82A]"></i>
           </div>
-          <h2 class="text-xl font-bold text-white mb-2">Ready to Scan Your Push-Ups</h2>
-          <p class="text-sm text-slate-400 max-w-md mb-6">
-            Place your device on the floor or desk so your upper body (shoulders, elbows, wrists, and hips) is visible in a side or 45° angle profile.
+          <h2 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white mb-2">
+            Position Your Phone or Laptop
+          </h2>
+          <p class="text-xs sm:text-sm text-[#8E8E93] max-w-md mb-6 leading-relaxed">
+            Set your phone on the floor leaning against a wall or water bottle. Keep your shoulders, elbows, and hips visible in frame.
           </p>
-          <div class="flex flex-wrap justify-center gap-3">
-            <button onclick="startWebcamMode()" class="flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/25 transition">
-              <i data-lucide="video" class="w-4 h-4"></i>
-              Enable Webcam Scanner
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-xs sm:max-w-md">
+            <button onclick="startWebcamMode()" class="ios-btn w-full sm:w-auto px-6 py-3.5 rounded-full font-bold text-sm bg-[#92E82A] text-black flex items-center justify-center gap-2 shadow-xl shadow-[#92E82A]/20">
+              <i data-lucide="video" class="w-4 h-4 stroke-[2.5]"></i>
+              Start Camera Scan
             </button>
-            <button onclick="startSimulationMode()" class="flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 transition">
-              <i data-lucide="play" class="w-4 h-4 text-cyan-400"></i>
-              Try Interactive AI Simulator
+            <button onclick="startSimulationMode()" class="ios-btn w-full sm:w-auto px-6 py-3.5 rounded-full font-semibold text-sm bg-[#2C2C2E] text-white border border-white/15 flex items-center justify-center gap-2">
+              <i data-lucide="play" class="w-4 h-4 text-[#00F5EA] fill-[#00F5EA]"></i>
+              Demo AI Simulator
             </button>
           </div>
         </div>
 
-        <!-- TOP-LEFT HUD: LIVE POSE STATUS & FORM BADGE -->
-        <div class="absolute top-4 left-4 z-20 flex flex-col gap-2 pointer-events-none">
-          <div id="formBadge" class="px-3.5 py-1.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2 shadow-lg">
-            <span id="formStatusDot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
-            <span id="formFeedbackText">Standby — Awaiting Pose</span>
+        <!-- TOP-LEFT FLOATING APPLE FITNESS+ HUD -->
+        <div class="absolute top-3.5 left-3.5 right-16 z-20 flex flex-col items-start gap-2 pointer-events-none">
+          <!-- Dynamic Coaching Island Pill -->
+          <div id="formBadge" class="ios-hud-pill px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide text-white flex items-center gap-2 shadow-lg">
+            <span id="formStatusDot" class="w-2.5 h-2.5 rounded-full bg-[#8E8E93]"></span>
+            <span id="formFeedbackText" class="truncate">Ready — Awaiting Plank</span>
           </div>
 
-          <div class="px-3 py-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-slate-800 text-[11px] font-mono-num text-slate-300 flex items-center gap-3">
-            <span>ELBOW: <strong id="hudElbowAngle" class="text-emerald-400">--°</strong></span>
-            <span>HIP: <strong id="hudHipAngle" class="text-cyan-400">--°</strong></span>
-            <span>STATE: <strong id="hudState" class="text-amber-400">IDLE</strong></span>
+          <!-- Joint Telemetry Pill -->
+          <div class="ios-hud-pill px-3 py-1 rounded-full text-[11px] font-semibold tabular-nums text-[#EBEBF5]/80 flex items-center gap-3">
+            <span>ELBOW <strong id="hudElbowAngle" class="text-[#92E82A]">--°</strong></span>
+            <span class="text-white/20">|</span>
+            <span>CORE <strong id="hudHipAngle" class="text-[#00F5EA]">--°</strong></span>
+            <span class="text-white/20">|</span>
+            <span id="hudState" class="text-[#FF9F0A] font-bold">IDLE</span>
           </div>
         </div>
 
-        <!-- RIGHT SIDE HUD: VERTICAL DEPTH GAUGE -->
-        <div class="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-2 bg-slate-950/85 backdrop-blur-md p-2.5 rounded-2xl border border-slate-800">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Depth</span>
-          <div class="w-3.5 h-36 bg-slate-800 rounded-full overflow-hidden flex flex-col justify-end p-0.5">
-            <div id="depthGaugeFill" class="w-full bg-gradient-to-t from-emerald-500 to-cyan-400 rounded-full transition-all duration-75" style="height: 0%"></div>
+        <!-- RIGHT SIDE VERTICAL DEPTH CAPSULE -->
+        <div class="absolute right-3.5 top-1/2 -translate-y-1/2 z-20 ios-hud-pill px-2 py-3 rounded-full flex flex-col items-center gap-2">
+          <span class="text-[9px] font-extrabold uppercase tracking-widest text-[#8E8E93]">Depth</span>
+          <div class="w-3 h-32 sm:h-36 bg-white/10 rounded-full overflow-hidden flex flex-col justify-end p-0.5">
+            <div id="depthGaugeFill" class="w-full bg-gradient-to-t from-[#30D158] via-[#92E82A] to-[#00F5EA] rounded-full transition-all duration-75" style="height: 0%"></div>
           </div>
-          <span id="depthPercentText" class="text-[11px] font-mono-num font-bold text-emerald-400">0%</span>
+          <span id="depthPercentText" class="text-[10px] tabular-nums font-extrabold text-[#92E82A]">0%</span>
         </div>
 
-        <!-- BOTTOM-LEFT HUD: SIMULATOR CONTROLS (VISIBLE IN SIMULATOR MODE) -->
-        <div id="simControlsHud" class="hidden absolute bottom-4 left-4 z-20 bg-slate-900/90 backdrop-blur-md border border-cyan-500/30 rounded-xl px-3.5 py-2 flex items-center gap-3">
-          <span class="text-xs font-semibold text-cyan-300 flex items-center gap-1.5">
-            <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Sim Speed:
+        <!-- BOTTOM FLOATING SIMULATOR SPEED CONTROL -->
+        <div id="simControlsHud" class="hidden absolute bottom-3.5 left-3.5 z-20 ios-hud-pill rounded-full px-3.5 py-2 items-center gap-2.5">
+          <span class="text-[11px] font-bold text-[#00F5EA] flex items-center gap-1">
+            <i data-lucide="gauge" class="w-3.5 h-3.5"></i> Pace
           </span>
-          <input id="simSpeedSlider" type="range" min="0.5" max="2.5" step="0.25" value="1.25" class="w-24 accent-cyan-400 cursor-pointer" />
+          <input id="simSpeedSlider" type="range" min="0.5" max="2.5" step="0.25" value="1.25" class="w-20 sm:w-24 accent-[#92E82A] cursor-pointer" />
         </div>
       </div>
 
-      <!-- BIG LIVE COUNTER & FINISH WORKOUT BAR -->
-      <div class="glass-card rounded-3xl p-5 sm:p-6 grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
-        <!-- Giant Rep Display -->
-        <div class="sm:col-span-5 flex items-center gap-5 border-b sm:border-b-0 sm:border-r border-slate-800 pb-4 sm:pb-0 sm:pr-5">
-          <div class="flex flex-col">
-            <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Current Set Reps</span>
-            <div id="liveRepCount" class="text-6xl sm:text-7xl font-black font-mono-num text-white leading-none mt-1">0</div>
+      <!-- APPLE FITNESS+ GIANT METRIC DOCK & QUICK LOGGING -->
+      <div class="ios-card p-4 sm:p-6 flex flex-col gap-4">
+        <div class="flex items-center justify-between gap-4">
+          <!-- Giant Tabular Rep Counter -->
+          <div>
+            <span class="text-[11px] font-bold uppercase tracking-widest text-[#8E8E93] block">Current Set Reps</span>
+            <div class="flex items-baseline gap-3 mt-0.5">
+              <div id="liveRepCount" class="text-6xl sm:text-7xl font-black tabular-nums text-white leading-none">0</div>
+              <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[#92E82A]/15 text-[#92E82A]">
+                Valid Reps
+              </span>
+            </div>
           </div>
-          <div class="flex flex-col gap-1.5 ml-auto">
-            <div class="text-xs text-slate-400">Est. Burn</div>
-            <div class="text-base font-bold font-mono-num text-emerald-400"><span id="liveCalories">0.0</span> kcal</div>
-            <div class="text-xs text-slate-400 mt-1">Avg Form</div>
-            <div class="text-base font-bold font-mono-num text-cyan-400"><span id="liveFormScore">100</span>%</div>
+
+          <!-- Secondary Fitness+ Metrics (Burn & Form) -->
+          <div class="flex items-center gap-4 sm:gap-6 bg-[#2C2C2E]/60 px-4 py-3 rounded-2xl border border-white/5">
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-[#8E8E93]">Active Kcal</div>
+              <div class="text-lg sm:text-xl font-extrabold tabular-nums text-[#FA114F] mt-0.5">
+                <span id="liveCalories">0.0</span>
+              </div>
+            </div>
+            <div class="w-px h-8 bg-white/10"></div>
+            <div>
+              <div class="text-[10px] font-bold uppercase tracking-wider text-[#8E8E93]">Form Score</div>
+              <div class="text-lg sm:text-xl font-extrabold tabular-nums text-[#92E82A] mt-0.5">
+                <span id="liveFormScore">100</span>%
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Save & Log Controls -->
-        <div class="sm:col-span-7 flex flex-col gap-3">
-          <div class="flex items-center justify-between text-xs text-slate-400">
-            <span>Workout Note / Tag</span>
-            <span id="sessionFeedbackHint" class="text-emerald-400 font-medium">Ready to log session</span>
-          </div>
-          <div class="flex flex-wrap sm:flex-nowrap gap-2.5">
-            <input id="workoutNoteInput" type="text" placeholder="e.g., Morning chest set, standard width..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-            <button onclick="saveWorkoutSession()" class="w-full sm:w-auto whitespace-nowrap px-5 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition">
-              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-              Save & Log Set
-            </button>
-            <button onclick="resetCurrentSet()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition" title="Reset Current Counter">
-              <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-            </button>
-          </div>
+        <!-- Tactile Action Row (All buttons >= 44px height) -->
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-2 border-t border-white/10">
+          <input id="workoutNoteInput" type="text" placeholder="Add workout label (e.g., Morning Chest Set)..." class="sm:col-span-5 h-12 px-4 rounded-[14px] bg-[#2C2C2E] border border-white/10 text-sm text-white placeholder-[#8E8E93] focus:outline-none focus:border-[#92E82A]" />
+
+          <button onclick="manualAddRep()" class="ios-btn sm:col-span-2 h-12 rounded-[14px] bg-[#2C2C2E] hover:bg-[#3A3A3C] text-white font-bold text-sm flex items-center justify-center gap-1.5 border border-white/10" title="Add +1 Manual Rep">
+            <i data-lucide="plus" class="w-4 h-4 text-[#92E82A]"></i>
+            <span>1 Rep</span>
+          </button>
+
+          <button onclick="saveWorkoutSession()" class="ios-btn sm:col-span-4 h-12 rounded-[14px] bg-[#30D158] hover:bg-[#28B84C] text-black font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#30D158]/20">
+            <i data-lucide="check" class="w-4 h-4 stroke-"></i>
+            <span>Log Set to Rings</span>
+          </button>
+
+          <button onclick="resetCurrentSet()" class="ios-btn sm:col-span-1 h-12 rounded-[14px] bg-[#2C2C2E] hover:bg-[#3A3A3C] text-[#8E8E93] hover:text-white flex items-center justify-center" title="Reset Counter" aria-label="Reset Counter">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          </button>
         </div>
       </div>
 
     </section>
 
-    <!-- RIGHT COLUMN: STREAK ENGINE, HEATMAP & WORKOUT LOGS (5 Cols) -->
+    <!-- =====================================================================
+         RIGHT COLUMN: RINGS, STREAK & WORKOUT HISTORY (5 Cols on Desktop)
+         ===================================================================== -->
     <aside class="lg:col-span-5 flex flex-col gap-5">
 
-      <!-- STREAK & CONSISTENCY CARD -->
-      <div class="glass-card rounded-3xl p-5 sm:p-6 flex flex-col gap-5">
+      <!-- TAB 2: APPLE FITNESS+ ACTIVITY RINGS & STREAK ENGINE -->
+      <div id="tabSectionRings" class="ios-card p-5 sm:p-6 flex flex-col gap-5">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-base font-bold text-white flex items-center gap-2">
-              <i data-lucide="flame" class="w-5 h-5 text-orange-400"></i>
-              Streak & Consistency Engine
+            <h2 class="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              <span>Activity Rings & Streak</span>
             </h2>
-            <p class="text-xs text-slate-400">Complete at least 1 logged set daily to build your streak</p>
+            <p class="text-xs text-[#8E8E93]">Close your daily Move, Form, and Streak rings</p>
           </div>
-          <button onclick="openGoalModal()" class="text-xs font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-            <i data-lucide="settings-2" class="w-3.5 h-3.5"></i> Set Goal
+          <button onclick="openGoalModal()" class="ios-btn px-3.5 py-2 rounded-full bg-[#2C2C2E] hover:bg-[#3A3A3C] text-xs font-bold text-[#0A84FF] flex items-center gap-1.5">
+            <i data-lucide="SlidersHorizontal" class="w-3.5 h-3.5"></i>
+            <span>Daily Goal</span>
           </button>
         </div>
 
-        <!-- 4 Summary Stat Tiles -->
+        <!-- CONCENTRIC SVG APPLE ACTIVITY RINGS + LEGEND -->
+        <div class="flex flex-col sm:flex-row items-center gap-6 bg-black/60 p-4 rounded-[20px] border border-white/10">
+          <!-- Concentric Rings SVG -->
+          <div class="relative w-36 h-36 flex items-center justify-center shrink-0">
+            <svg class="w-full h-full" viewBox="0 0 160 160">
+              <!-- Track Backgrounds -->
+              <circle cx="80" cy="80" r="64" fill="none" stroke="#FA114F" stroke-opacity="0.2" stroke-width="14" />
+              <circle cx="80" cy="80" r="46" fill="none" stroke="#92E82A" stroke-opacity="0.2" stroke-width="14" />
+              <circle cx="80" cy="80" r="28" fill="none" stroke="#00F5EA" stroke-opacity="0.2" stroke-width="14" />
+
+              <!-- Outer Ring: Daily Reps (Circumference = 2 * pi * 64 ≈ 402.12) -->
+              <circle id="ringMove" class="ring-progress" cx="80" cy="80" r="64" fill="none" stroke="#FA114F" stroke-width="14" stroke-linecap="round" stroke-dasharray="402.12" stroke-dashoffset="402.12" />
+
+              <!-- Middle Ring: Form Quality (Circumference = 2 * pi * 46 ≈ 289.03) -->
+              <circle id="ringExercise" class="ring-progress" cx="80" cy="80" r="46" fill="none" stroke="#92E82A" stroke-width="14" stroke-linecap="round" stroke-dasharray="289.03" stroke-dashoffset="289.03" />
+
+              <!-- Inner Ring: Streak Consistency (Circumference = 2 * pi * 28 ≈ 175.93) -->
+              <circle id="ringStand" class="ring-progress" cx="80" cy="80" r="28" fill="none" stroke="#00F5EA" stroke-width="14" stroke-linecap="round" stroke-dasharray="175.93" stroke-dashoffset="175.93" />
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+              <span id="ringCenterPct" class="text-sm font-black tabular-nums text-white">0%</span>
+            </div>
+          </div>
+
+          <!-- Ring Metrics Breakdown -->
+          <div class="flex flex-col gap-3 w-full">
+            <div>
+              <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[#FA114F]">
+                <span>Move (Daily Reps)</span>
+                <span id="ringMoveLabel" class="tabular-nums">0/50</span>
+              </div>
+              <div class="text-xs text-[#8E8E93] mt-0.5">Push-ups completed today</div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[#92E82A]">
+                <span>Form Accuracy</span>
+                <span id="ringFormLabel" class="tabular-nums">95%</span>
+              </div>
+              <div class="text-xs text-[#8E8E93] mt-0.5">Average plank & depth score</div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-[#00F5EA]">
+                <span>Active Streak</span>
+                <span id="ringStreakLabel" class="tabular-nums">0 / 7 Days</span>
+              </div>
+              <div class="text-xs text-[#8E8E93] mt-0.5">Consecutive days logged</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Apple Health Summary Bento Tiles -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
-            <div class="text-[11px] text-slate-400 font-medium">Active Streak</div>
-            <div class="text-xl font-black font-mono-num text-orange-400 mt-0.5"><span id="statCurrentStreak">0</span>d</div>
+          <div class="p-3.5 rounded-[18px] bg-[#2C2C2E]/75 border border-white/5">
+            <div class="text-[11px] text-[#8E8E93] font-semibold">Current</div>
+            <div class="text-xl font-black tabular-nums text-[#FF9F0A] mt-0.5"><span id="statCurrentStreak">0</span>d</div>
           </div>
-          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
-            <div class="text-[11px] text-slate-400 font-medium">Best Streak</div>
-            <div class="text-xl font-black font-mono-num text-amber-300 mt-0.5"><span id="statBestStreak">0</span>d</div>
+          <div class="p-3.5 rounded-[18px] bg-[#2C2C2E]/75 border border-white/5">
+            <div class="text-[11px] text-[#8E8E93] font-semibold">Best Streak</div>
+            <div class="text-xl font-black tabular-nums text-[#FFD60A] mt-0.5"><span id="statBestStreak">0</span>d</div>
           </div>
-          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
-            <div class="text-[11px] text-slate-400 font-medium">Total Reps</div>
-            <div class="text-xl font-black font-mono-num text-emerald-400 mt-0.5" id="statTotalReps">0</div>
+          <div class="p-3.5 rounded-[18px] bg-[#2C2C2E]/75 border border-white/5">
+            <div class="text-[11px] text-[#8E8E93] font-semibold">Total Reps</div>
+            <div class="text-xl font-black tabular-nums text-[#92E82A] mt-0.5" id="statTotalReps">0</div>
           </div>
-          <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800/90">
-            <div class="text-[11px] text-slate-400 font-medium">Personal Best</div>
-            <div class="text-xl font-black font-mono-num text-cyan-400 mt-0.5"><span id="statMaxSet">0</span></div>
-          </div>
-        </div>
-
-        <!-- Daily Goal Progress Bar -->
-        <div class="p-4 rounded-2xl bg-slate-900/70 border border-slate-800/80 flex flex-col gap-2">
-          <div class="flex items-center justify-between text-xs">
-            <span class="font-semibold text-slate-200">Daily Target Progress</span>
-            <span class="font-mono-num font-bold text-emerald-400" id="goalProgressLabel">0 / 50 reps (0%)</span>
-          </div>
-          <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
-            <div id="goalProgressBar" class="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+          <div class="p-3.5 rounded-[18px] bg-[#2C2C2E]/75 border border-white/5">
+            <div class="text-[11px] text-[#8E8E93] font-semibold">Max Set</div>
+            <div class="text-xl font-black tabular-nums text-[#00F5EA] mt-0.5" id="statMaxSet">0</div>
           </div>
         </div>
 
-        <!-- 7-Day Activity Strip & Bar Chart -->
+        <!-- 7-Day Consistency Chart -->
         <div>
-          <div class="flex items-center justify-between mb-2.5">
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Last 7 Days Activity</span>
-            <span class="text-[11px] text-slate-400">Reps per day</span>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-[#8E8E93]">7-Day Volume Trend</span>
+            <span id="goalProgressLabel" class="text-[11px] font-semibold tabular-nums text-[#92E82A]">Goal: 50/day</span>
           </div>
-          <div id="weeklyChartContainer" class="grid grid-cols-7 gap-2 pt-2">
-            <!-- Dynamically populated by JS -->
+          <div id="weeklyChartContainer" class="grid grid-cols-7 gap-2 pt-1">
+            <!-- Populated by JS -->
           </div>
         </div>
       </div>
 
-      <!-- WORKOUT LOG HISTORY CARD -->
-      <div class="glass-card rounded-3xl p-5 sm:p-6 flex-1 flex flex-col gap-4">
+      <!-- TAB 3: WORKOUT LOG HISTORY CARD -->
+      <div id="tabSectionHistory" class="ios-card p-5 sm:p-6 flex-1 flex flex-col gap-4">
         <div class="flex items-center justify-between">
           <div>
-            <h2 class="text-base font-bold text-white flex items-center gap-2">
-              <i data-lucide="clipboard-list" class="w-5 h-5 text-emerald-400"></i>
-              Workout Log History
-            </h2>
-            <p class="text-xs text-slate-400">Timestamped sets with form accuracy & duration</p>
+            <h2 class="text-base sm:text-lg font-bold text-white tracking-tight">Workout Sessions</h2>
+            <p class="text-xs text-[#8E8E93]">Saved sets with biomechanical form scores</p>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="exportLogsCSV()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 border border-slate-700 flex items-center gap-1 transition" title="Export CSV">
-              <i data-lucide="download" class="w-3.5 h-3.5"></i> CSV
+            <button onclick="exportLogsCSV()" class="ios-btn px-3 py-2 rounded-full bg-[#2C2C2E] hover:bg-[#3A3A3C] text-xs font-bold text-white flex items-center gap-1.5" title="Export CSV">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-[#0A84FF]"></i>
+              <span>CSV</span>
             </button>
-            <button onclick="clearAllLogs()" class="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-xs font-semibold text-rose-300 border border-rose-500/20 transition" title="Clear History">
-              Clear
+            <button onclick="clearAllLogs()" class="ios-btn px-3 py-2 rounded-full bg-[#FF453A]/15 hover:bg-[#FF453A]/25 text-xs font-bold text-[#FF453A]" title="Reset Logs">
+              Reset
             </button>
           </div>
         </div>
 
-        <!-- Scrollable Log List -->
         <div id="workoutLogList" class="flex flex-col gap-2.5 max-h-[340px] overflow-y-auto pr-1">
-          <!-- Dynamically populated by JS -->
+          <!-- Populated by JS -->
         </div>
       </div>
 
     </aside>
   </main>
 
-  <!-- DAILY GOAL MODAL -->
-  <div id="goalModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass-card rounded-2xl max-w-sm w-full p-6 border border-slate-700 shadow-2xl">
-      <h3 class="text-lg font-bold text-white mb-1">Set Daily Push-Up Target</h3>
-      <p class="text-xs text-slate-400 mb-4">Your daily progress ring and streak tracker will calibrate to this goal.</p>
-      <input id="goalInput" type="number" min="5" max="1000" step="5" value="50" class="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono-num text-lg mb-4 focus:outline-none focus:border-emerald-500" />
-      <div class="flex justify-end gap-2">
-        <button onclick="closeGoalModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-sm font-semibold">Cancel</button>
-        <button onclick="saveDailyGoal()" class="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-bold">Save Target</button>
+  <!-- MOBILE iOS TRANSLUCENT TAB BAR (Navigation Only — Apple HIG Compliant) -->
+  <nav class="lg:hidden fixed bottom-0 inset-x-0 z-40 ios-glass border-t border-white/15 px-6 pt-2 pb-[calc(8px+env(safe-area-inset-bottom,8px))]">
+    <div class="max-w-md mx-auto grid grid-cols-3 gap-2">
+      <button id="navTabWorkout" onclick="switchMobileTab('workout')" class="ios-btn flex flex-col items-center justify-center py-1 rounded-xl text-[#92E82A]">
+        <i data-lucide="scan-line" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold mt-1">Workout</span>
+      </button>
+      <button id="navTabRings" onclick="switchMobileTab('rings')" class="ios-btn flex flex-col items-center justify-center py-1 rounded-xl text-[#8E8E93]">
+        <i data-lucide="flame" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold mt-1">Rings</span>
+      </button>
+      <button id="navTabHistory" onclick="switchMobileTab('history')" class="ios-btn flex flex-col items-center justify-center py-1 rounded-xl text-[#8E8E93]">
+        <i data-lucide="clock" class="w-5 h-5"></i>
+        <span class="text-[10px] font-bold mt-1">History</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- iOS SHEET MODAL FOR DAILY TARGET -->
+  <div id="goalModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="ios-card rounded-t-[28px] sm:rounded-[28px] max-w-sm w-full p-6 border border-white/15 shadow-2xl">
+      <div class="w-10 h-1.5 bg-white/20 rounded-full mx-auto mb-4 sm:hidden"></div>
+      <h3 class="text-lg font-extrabold text-white mb-1">Daily Move Goal</h3>
+      <p class="text-xs text-[#8E8E93] mb-4">Set your daily push-up target to calibrate your outer pink Move Ring.</p>
+      <input id="goalInput" type="number" min="5" max="1000" step="5" value="50" class="w-full h-12 px-4 rounded-[14px] bg-[#2C2C2E] border border-white/15 text-white tabular-nums font-bold text-lg mb-5 focus:outline-none focus:border-[#FA114F]" />
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="closeGoalModal()" class="ios-btn h-12 rounded-[14px] bg-[#2C2C2E] text-white text-sm font-bold">Cancel</button>
+        <button onclick="saveDailyGoal()" class="ios-btn h-12 rounded-[14px] bg-[#FA114F] text-white text-sm font-extrabold">Save Goal</button>
       </div>
     </div>
   </div>
 
-  <!-- APPLICATION JAVASCRIPT -->
+  <!-- APPLICATION LOGIC -->
   <script>
     /**************************************************************
-     * 1. STATE & STORAGE ENGINE
+     * 1. STATE, HAPTICS & STORAGE ENGINE
      **************************************************************/
     const STORAGE_KEY_LOGS = 'pushpro_ai_workout_logs_v1';
     const STORAGE_KEY_GOAL = 'pushpro_ai_daily_goal_v1';
 
     let currentReps = 0;
-    let pushupStage = 'UP'; // 'UP' or 'DOWN'
+    let pushupStage = 'UP';
     let reachedBottomDepth = false;
     let angleHistory = [];
     let formScores = [];
 
     let detectorMode = 'IDLE'; // 'IDLE' | 'WEBCAM' | 'SIMULATION'
+    let currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
     let voiceEnabled = true;
     let cameraInstance = null;
     let poseInstance = null;
     let simAnimationId = null;
     let simPhase = 0;
 
-    // Session Timer
     let sessionSeconds = 0;
     let timerInterval = null;
-
-    // Audio Context for synth beeps
     let audioCtx = null;
+
+    function triggerHaptic(pattern = 18) {
+      if (navigator.vibrate) {
+        try { navigator.vibrate(pattern); } catch (e) {}
+      }
+    }
 
     function initAudio() {
       if (!audioCtx) {
@@ -379,7 +544,7 @@
         const gain = audioCtx.createGain();
         osc.type = type;
         osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.14, audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
@@ -393,26 +558,74 @@
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.15;
-      utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     }
 
     function toggleVoice() {
+      triggerHaptic(12);
       voiceEnabled = !voiceEnabled;
       const btn = document.getElementById('voiceToggleBtn');
       const icon = document.getElementById('voiceIcon');
       if (voiceEnabled) {
-        btn.classList.replace('text-slate-500', 'text-emerald-400');
+        btn.classList.replace('text-[#8E8E93]', 'text-[#92E82A]');
         icon.setAttribute('data-lucide', 'volume-2');
       } else {
-        btn.classList.replace('text-emerald-400', 'text-slate-500');
+        btn.classList.replace('text-[#92E82A]', 'text-[#8E8E93]');
         icon.setAttribute('data-lucide', 'volume-x');
       }
       lucide.createIcons();
     }
 
     /**************************************************************
-     * 2. BIOMECHANICAL ANGLE COMPUTATION & REP COUNTER
+     * 2. MOBILE iOS TAB BAR NAVIGATION
+     **************************************************************/
+    function switchMobileTab(tab) {
+      triggerHaptic(10);
+      if (window.innerWidth >= 1024) return; // Desktop shows all Bento cards
+
+      const secWorkout = document.getElementById('tabSectionWorkout');
+      const secRings = document.getElementById('tabSectionRings');
+      const secHistory = document.getElementById('tabSectionHistory');
+
+      const btnWorkout = document.getElementById('navTabWorkout');
+      const btnRings = document.getElementById('navTabRings');
+      const btnHistory = document.getElementById('navTabHistory');
+
+      [secWorkout, secRings, secHistory].forEach((el) => el.classList.add('hidden'));
+      [btnWorkout, btnRings, btnHistory].forEach((btn) => {
+        btn.classList.remove('text-[#92E82A]');
+        btn.classList.add('text-[#8E8E93]');
+      });
+
+      if (tab === 'workout') {
+        secWorkout.classList.remove('hidden');
+        btnWorkout.classList.replace('text-[#8E8E93]', 'text-[#92E82A]');
+      } else if (tab === 'rings') {
+        secRings.classList.remove('hidden');
+        btnRings.classList.replace('text-[#8E8E93]', 'text-[#92E82A]');
+      } else if (tab === 'history') {
+        secHistory.classList.remove('hidden');
+        btnHistory.classList.replace('text-[#8E8E93]', 'text-[#92E82A]');
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 1024) {
+        document.getElementById('tabSectionWorkout').classList.remove('hidden');
+        document.getElementById('tabSectionRings').classList.remove('hidden');
+        document.getElementById('tabSectionHistory').classList.remove('hidden');
+      } else {
+        // Ensure active mobile tab state is respected
+        const workoutVisible = !document.getElementById('tabSectionWorkout').classList.contains('hidden');
+        const ringsVisible = !document.getElementById('tabSectionRings').classList.contains('hidden');
+        if (workoutVisible && ringsVisible) {
+          switchMobileTab('workout');
+        }
+      }
+    });
+
+    /**************************************************************
+     * 3. BIOMECHANICS & HYSTERESIS STATE MACHINE
      **************************************************************/
     function calculateAngle(a, b, c) {
       const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -422,87 +635,81 @@
     }
 
     function processBiomechanics(rawElbowAngle, rawHipAngle) {
-      // 3-frame moving average smoothing
       angleHistory.push(rawElbowAngle);
       if (angleHistory.length > 3) angleHistory.shift();
       const elbowAngle = Math.round(angleHistory.reduce((a, b) => a + b, 0) / angleHistory.length);
       const hipAngle = Math.round(rawHipAngle);
 
-      // Update HUD numbers
       document.getElementById('hudElbowAngle').textContent = `${elbowAngle}°`;
       document.getElementById('hudHipAngle').textContent = `${hipAngle}°`;
 
-      // Calculate Depth Percentage (165 deg = 0%, 85 deg = 100%)
       const clampedDepth = Math.max(0, Math.min(100, Math.round(((165 - elbowAngle) / (165 - 85)) * 100)));
       document.getElementById('depthGaugeFill').style.height = `${clampedDepth}%`;
       document.getElementById('depthPercentText').textContent = `${clampedDepth}%`;
 
-      // Check Core Plank Alignment
       const isPlankAligned = hipAngle >= 150 && hipAngle <= 200;
       const formDot = document.getElementById('formStatusDot');
       const formText = document.getElementById('formFeedbackText');
 
       if (!isPlankAligned) {
-        formDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping';
-        formText.textContent = 'Fix Form: Keep Back & Hips Straight!';
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-[#FF453A] animate-ping';
+        formText.textContent = 'Align Core — Keep Hips Straight';
       } else if (elbowAngle <= 92) {
-        formDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
-        formText.textContent = 'Great Depth! Drive Up Now';
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-[#92E82A]';
+        formText.textContent = 'Target Depth Hit! Drive Up';
       } else if (pushupStage === 'DOWN' && elbowAngle < 130) {
-        formDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
-        formText.textContent = 'Lower Chest to 90° Elbow Angle';
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-[#FF9F0A]';
+        formText.textContent = 'Lower Chest to 90°';
       } else {
-        formDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400';
-        formText.textContent = 'Good Plank Alignment — Ready';
+        formDot.className = 'w-2.5 h-2.5 rounded-full bg-[#30D158]';
+        formText.textContent = 'Plank Locked — Ready';
       }
 
-      // Hysteresis State Machine
-      // Transition UP -> DOWN
       if (elbowAngle <= 92 && pushupStage === 'UP') {
         pushupStage = 'DOWN';
         reachedBottomDepth = true;
-        document.getElementById('hudState').textContent = 'DOWN (90°)';
+        document.getElementById('hudState').textContent = 'BOTTOM';
+        triggerHaptic(15);
         playBeep(540, 0.08, 'triangle');
-        // Record form score for this rep based on hip alignment & depth
-        const repForm = isPlankAligned ? Math.min(100, 90 + Math.max(0, 92 - elbowAngle)) : 70;
+        const repForm = isPlankAligned ? Math.min(100, 90 + Math.max(0, 92 - elbowAngle)) : 72;
         formScores.push(repForm);
       }
 
-      // Transition DOWN -> UP (Rep Completed)
       if (elbowAngle >= 158 && pushupStage === 'DOWN' && reachedBottomDepth) {
         pushupStage = 'UP';
         reachedBottomDepth = false;
-        document.getElementById('hudState').textContent = 'UP (LOCK)';
+        document.getElementById('hudState').textContent = 'LOCKED';
         incrementRepCounter();
       }
     }
 
     function incrementRepCounter() {
       currentReps++;
+      triggerHaptic([20, 40, 20]);
       const repEl = document.getElementById('liveRepCount');
       repEl.textContent = currentReps;
-      repEl.classList.remove('rep-pulse');
-      void repEl.offsetWidth; // trigger reflow
-      repEl.classList.add('rep-pulse');
+      repEl.classList.remove('rep-pop');
+      void repEl.offsetWidth;
+      repEl.classList.add('rep-pop');
 
-      // Update Calories (~0.32 kcal per push-up) & Form Score
       document.getElementById('liveCalories').textContent = (currentReps * 0.32).toFixed(1);
       const avgForm = formScores.length
         ? Math.round(formScores.reduce((a, b) => a + b, 0) / formScores.length)
         : 98;
       document.getElementById('liveFormScore').textContent = avgForm;
 
-      playBeep(980, 0.15, 'sine');
+      playBeep(980, 0.14, 'sine');
       speakText(String(currentReps));
     }
 
     function manualAddRep() {
       if (!timerInterval) startSessionTimer();
-      formScores.push(95);
+      formScores.push(96);
       incrementRepCounter();
     }
 
     function resetCurrentSet() {
+      triggerHaptic(15);
       currentReps = 0;
       pushupStage = 'UP';
       reachedBottomDepth = false;
@@ -515,7 +722,7 @@
     }
 
     /**************************************************************
-     * 3. TIMER ENGINE
+     * 4. SESSION TIMER
      **************************************************************/
     function startSessionTimer() {
       if (timerInterval) clearInterval(timerInterval);
@@ -535,8 +742,17 @@
     }
 
     /**************************************************************
-     * 4. MEDIAPIPE WEBCAM POSE DETECTION
+     * 5. MEDIAPIPE CAMERA & FRONT/BACK FLIP SUPPORT
      **************************************************************/
+    async function flipCameraFacingMode() {
+      triggerHaptic(20);
+      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      showToast(`Camera switched to ${currentFacingMode === 'user' ? 'Front' : 'Back'} lens`);
+      if (detectorMode === 'WEBCAM') {
+        await startWebcamMode();
+      }
+    }
+
     async function startWebcamMode() {
       stopDetector();
       detectorMode = 'WEBCAM';
@@ -570,24 +786,22 @@
           canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
           if (results.poseLandmarks) {
-            // Draw Skeleton
             drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
-              color: '#10B981',
+              color: '#92E82A',
               lineWidth: 4
             });
             drawLandmarks(canvasCtx, results.poseLandmarks, {
-              color: '#22D3EE',
+              color: '#00F5EA',
               lineWidth: 2,
               radius: 5
             });
 
-            // Pick side with higher visibility (Left: 11,13,15,23,27 | Right: 12,14,16,24,28)
             const lm = results.poseLandmarks;
-            const useLeft = (lm[13]?.visibility || 0) >= (lm[14]?.visibility || 0);
+            const useLeft = (lm?.visibility || 0) >= (lm?.visibility || 0);
 
-            const shoulder = useLeft ? lm[11] : lm[12];
-            const elbow = useLeft ? lm[13] : lm[14];
-            const wrist = useLeft ? lm[15] : lm[16];
+            const shoulder = useLeft ? lm : lm;
+            const elbow = useLeft ? lm : lm;
+            const wrist = useLeft ? lm : lm[16];
             const hip = useLeft ? lm[23] : lm[24];
             const ankle = useLeft ? lm[27] : lm[28];
 
@@ -595,14 +809,15 @@
               const elbowAngle = calculateAngle(shoulder, elbow, wrist);
               const hipAngle = calculateAngle(shoulder, hip, ankle);
 
-              // Draw live angle callout near elbow
               const ex = elbow.x * canvasElement.width;
               const ey = elbow.y * canvasElement.height;
-              canvasCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-              canvasCtx.fillRect(ex + 10, ey - 28, 68, 28);
-              canvasCtx.fillStyle = '#10B981';
-              canvasCtx.font = 'bold 16px JetBrains Mono';
-              canvasCtx.fillText(`${Math.round(elbowAngle)}°`, ex + 18, ey - 9);
+              canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+              canvasCtx.beginPath();
+              canvasCtx.roundRect(ex + 10, ey - 28, 68, 28, 10);
+              canvasCtx.fill();
+              canvasCtx.fillStyle = '#92E82A';
+              canvasCtx.font = '800 15px -apple-system, sans-serif';
+              canvasCtx.fillText(`${Math.round(elbowAngle)}°`, ex + 20, ey - 9);
 
               processBiomechanics(elbowAngle, hipAngle);
             }
@@ -616,26 +831,27 @@
               await poseInstance.send({ image: videoElement });
             }
           },
+          facingMode: currentFacingMode,
           width: 960,
           height: 540
         });
 
         await cameraInstance.start();
       } catch (err) {
-        alert('Camera access failed or was denied. Switching to Interactive AI Simulator mode so you can test the push-up detector!');
+        showToast('Camera unavailable — switched to AI Simulator');
         startSimulationMode();
       }
     }
 
     /**************************************************************
-     * 5. INTERACTIVE AI BIOMECHANICAL SIMULATOR MODE
+     * 6. APPLE FITNESS+ BIOMECHANICAL SIMULATOR MODE
      **************************************************************/
     function startSimulationMode() {
       stopDetector();
       detectorMode = 'SIMULATION';
       document.getElementById('idleOverlay').classList.add('hidden');
       document.getElementById('stopModeBtn').classList.replace('hidden', 'flex');
-      document.getElementById('simControlsHud').classList.remove('hidden');
+      document.getElementById('simControlsHud').classList.replace('hidden', 'flex');
       startSessionTimer();
 
       const canvas = document.getElementById('outputCanvas');
@@ -647,11 +863,11 @@
         const speed = parseFloat(document.getElementById('simSpeedSlider').value || 1.25);
         simPhase += 0.032 * speed;
 
-        // Clear & Draw Cyber Grid Floor
-        ctx.fillStyle = '#090D16';
+        ctx.fillStyle = '#050507';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.strokeStyle = 'rgba(30, 41, 59, 0.6)';
+        // Subtle Apple Fitness Studio Grid
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
         ctx.lineWidth = 1;
         for (let x = 0; x < canvas.width; x += 48) {
           ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
@@ -660,46 +876,29 @@
           ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
         }
 
-        // Ground Floor Line
         const floorY = 430;
-        ctx.strokeStyle = '#10B981';
+        ctx.strokeStyle = '#92E82A';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(100, floorY);
-        ctx.lineTo(860, floorY);
+        ctx.moveTo(120, floorY);
+        ctx.lineTo(840, floorY);
         ctx.stroke();
 
-        // Oscillate push-up depth (0 = top plank, 1 = bottom push-up)
         const depthFactor = (Math.sin(simPhase - Math.PI / 2) + 1) / 2;
 
-        // Kinematic coordinates in side profile
-        const ankle = { x: 230, y: floorY - 18 };
+        const ankle = { x: 240, y: floorY - 18 };
         const wrist = { x: 690, y: floorY - 12 };
-
-        // Shoulder moves down as depthFactor increases
-        const shoulder = {
-          x: 675,
-          y: 235 + depthFactor * 125
-        };
-
-        // Hip interpolates between ankle and shoulder
+        const shoulder = { x: 675, y: 235 + depthFactor * 125 };
         const hip = {
           x: (ankle.x + shoulder.x) / 2,
           y: (ankle.y + shoulder.y) / 2 - 4
         };
-
-        // Elbow bends outward/backward during descent
         const elbow = {
           x: 682 - Math.sin(depthFactor * Math.PI * 0.65) * 78,
           y: (shoulder.y + wrist.y) / 2 + 12
         };
+        const head = { x: shoulder.x + 54, y: shoulder.y - 18 };
 
-        const head = {
-          x: shoulder.x + 55,
-          y: shoulder.y - 18
-        };
-
-        // Draw Body Segments
         const segments = [
           [ankle, hip],
           [hip, shoulder],
@@ -708,8 +907,8 @@
         ];
 
         ctx.lineCap = 'round';
-        ctx.lineWidth = 8;
-        ctx.strokeStyle = '#10B981';
+        ctx.lineWidth = 9;
+        ctx.strokeStyle = '#92E82A';
         segments.forEach(([p1, p2]) => {
           ctx.beginPath();
           ctx.moveTo(p1.x, p1.y);
@@ -717,42 +916,36 @@
           ctx.stroke();
         });
 
-        // Draw Head
         ctx.beginPath();
         ctx.arc(head.x, head.y, 24, 0, Math.PI * 2);
-        ctx.fillStyle = '#0F172A';
+        ctx.fillStyle = '#1C1C1E';
         ctx.fill();
         ctx.lineWidth = 4;
-        ctx.strokeStyle = '#22D3EE';
+        ctx.strokeStyle = '#00F5EA';
         ctx.stroke();
 
-        // Draw Landmarks
         [ankle, hip, shoulder, elbow, wrist].forEach((pt) => {
           ctx.beginPath();
           ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2);
-          ctx.fillStyle = '#22D3EE';
+          ctx.fillStyle = '#00F5EA';
           ctx.fill();
           ctx.lineWidth = 3;
-          ctx.strokeStyle = '#090D16';
+          ctx.strokeStyle = '#000000';
           ctx.stroke();
         });
 
-        // Compute real angles from simulated coordinates
         const elbowAngle = calculateAngle(shoulder, elbow, wrist);
         const hipAngle = calculateAngle(shoulder, hip, ankle);
 
-        // Render Live Elbow Angle Tag on Canvas
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-        ctx.fillRect(elbow.x - 85, elbow.y - 20, 70, 30);
-        ctx.strokeStyle = '#10B981';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(elbow.x - 85, elbow.y - 20, 70, 30);
-        ctx.fillStyle = '#10B981';
-        ctx.font = 'bold 16px JetBrains Mono';
-        ctx.fillText(`${Math.round(elbowAngle)}°`, elbow.x - 73, elbow.y + 1);
+        ctx.fillStyle = 'rgba(28, 28, 30, 0.92)';
+        ctx.beginPath();
+        ctx.roundRect(elbow.x - 86, elbow.y - 22, 72, 30, 10);
+        ctx.fill();
+        ctx.fillStyle = '#92E82A';
+        ctx.font = '800 16px -apple-system, sans-serif';
+        ctx.fillText(`${Math.round(elbowAngle)}°`, elbow.x - 70, elbow.y - 1);
 
         processBiomechanics(elbowAngle, hipAngle);
-
         simAnimationId = requestAnimationFrame(renderSimFrame);
       }
 
@@ -774,12 +967,12 @@
 
       document.getElementById('idleOverlay').classList.remove('hidden');
       document.getElementById('stopModeBtn').classList.replace('flex', 'hidden');
-      document.getElementById('simControlsHud').classList.add('hidden');
+      document.getElementById('simControlsHud').classList.replace('flex', 'hidden');
       document.getElementById('hudState').textContent = 'IDLE';
     }
 
     /**************************************************************
-     * 6. WORKOUT LOGGING & STREAK ENGINE
+     * 7. WORKOUT LOGGING, STREAKS & APPLE FITNESS RINGS
      **************************************************************/
     function getLocalDateKey(dateObj = new Date()) {
       const year = dateObj.getFullYear();
@@ -797,7 +990,6 @@
     }
 
     function seedSampleLogsIfEmpty() {
-      // Seed 3 past days so the user immediately sees an active streak & chart
       const now = new Date();
       const d1 = new Date(now); d1.setDate(now.getDate() - 1);
       const d2 = new Date(now); d2.setDate(now.getDate() - 2);
@@ -812,7 +1004,7 @@
           durationSec: 78,
           calories: 11.2,
           formScore: 96,
-          note: 'Evening endurance set'
+          note: 'Evening Apple Fitness+ Set'
         },
         {
           id: 'seed-2',
@@ -822,7 +1014,7 @@
           durationSec: 65,
           calories: 9.6,
           formScore: 94,
-          note: 'Standard plank push-ups'
+          note: 'Strict Core Plank Push-Ups'
         },
         {
           id: 'seed-3',
@@ -832,7 +1024,7 @@
           durationSec: 55,
           calories: 8.0,
           formScore: 92,
-          note: 'Warmup AI calibration set'
+          note: 'Warmup Calibration Set'
         }
       ];
       localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(initialLogs));
@@ -841,10 +1033,11 @@
 
     function saveWorkoutSession() {
       if (currentReps <= 0) {
-        alert('Complete at least 1 push-up (using the AI camera, simulator, or +1 Rep button) before saving a set!');
+        showToast('Complete at least 1 push-up before logging!');
         return;
       }
 
+      triggerHaptic([30, 50, 40]);
       const logs = getWorkoutLogs();
       const noteInput = document.getElementById('workoutNoteInput');
       const avgForm = formScores.length
@@ -865,11 +1058,10 @@
       logs.unshift(newEntry);
       localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
 
-      // Feedback
       playBeep(1120, 0.2, 'sine');
-      speakText(`Workout saved. ${currentReps} push-ups logged.`);
+      speakText(`Ring updated. ${currentReps} push-ups logged.`);
+      showToast(`Logged ${currentReps} reps to your Activity Rings!`);
       noteInput.value = '';
-      document.getElementById('sessionFeedbackHint').textContent = `Saved ${currentReps} reps!`;
 
       resetCurrentSet();
       renderDashboard();
@@ -884,7 +1076,6 @@
       yesterdayDate.setDate(yesterdayDate.getDate() - 1);
       const yesterdayKey = getLocalDateKey(yesterdayDate);
 
-      // Calculate Current Streak
       let currentStreak = 0;
       let checkDate = new Date();
 
@@ -908,7 +1099,6 @@
         }
       }
 
-      // Calculate Best Streak
       const ascDays = [...uniqueDays].sort();
       let bestStreak = 0;
       let tempStreak = 0;
@@ -929,11 +1119,27 @@
       return { currentStreak, bestStreak };
     }
 
-    /**************************************************************
-     * 7. RENDER DASHBOARD, HEATMAP & LOG LIST
-     **************************************************************/
     function getDailyGoal() {
       return parseInt(localStorage.getItem(STORAGE_KEY_GOAL) || '50', 10);
+    }
+
+    function updateActivityRings(todayReps, goal, avgForm, currentStreak) {
+      const movePct = Math.min(1, todayReps / Math.max(1, goal));
+      const formPct = Math.min(1, avgForm / 100);
+      const streakPct = Math.min(1, currentStreak / 7);
+
+      const moveCircumference = 402.12;
+      const formCircumference = 289.03;
+      const streakCircumference = 175.93;
+
+      document.getElementById('ringMove').style.strokeDashoffset = String(moveCircumference * (1 - movePct));
+      document.getElementById('ringExercise').style.strokeDashoffset = String(formCircumference * (1 - formPct));
+      document.getElementById('ringStand').style.strokeDashoffset = String(streakCircumference * (1 - streakPct));
+
+      document.getElementById('ringCenterPct').textContent = `${Math.round((movePct * 100))}%`;
+      document.getElementById('ringMoveLabel').textContent = `${todayReps}/${goal}`;
+      document.getElementById('ringFormLabel').textContent = `${avgForm}%`;
+      document.getElementById('ringStreakLabel').textContent = `${currentStreak}/7d`;
     }
 
     function renderDashboard() {
@@ -941,34 +1147,27 @@
       const goal = getDailyGoal();
       const todayKey = getLocalDateKey(new Date());
 
-      // Aggregate KPIs
       const totalReps = logs.reduce((sum, item) => sum + item.reps, 0);
       const maxSet = logs.reduce((max, item) => Math.max(max, item.reps), 0);
       const todayReps = logs
         .filter((item) => item.dateKey === todayKey)
         .reduce((sum, item) => sum + item.reps, 0);
 
+      const avgFormAll = logs.length
+        ? Math.round(logs.reduce((s, l) => s + (l.formScore || 95), 0) / logs.length)
+        : 96;
+
       const { currentStreak, bestStreak } = computeStreakStats(logs);
 
-      // Header & Tile updates
       document.getElementById('headerStreak').textContent = currentStreak;
-      document.getElementById('headerTodayReps').textContent = todayReps;
-      document.getElementById('headerGoalTarget').textContent = goal;
-
       document.getElementById('statCurrentStreak').textContent = currentStreak;
       document.getElementById('statBestStreak').textContent = bestStreak;
       document.getElementById('statTotalReps').textContent = totalReps.toLocaleString();
       document.getElementById('statMaxSet').textContent = maxSet;
+      document.getElementById('goalProgressLabel').textContent = `Goal: ${goal}/day`;
 
-      // Goal Progress Bar
-      const pct = Math.min(100, Math.round((todayReps / goal) * 100));
-      document.getElementById('goalProgressLabel').textContent = `${todayReps} / ${goal} reps (${pct}%)`;
-      document.getElementById('goalProgressBar').style.width = `${pct}%`;
-
-      // Render 7-Day Activity Chart
+      updateActivityRings(todayReps, goal, avgFormAll, currentStreak);
       renderWeeklyChart(logs, goal);
-
-      // Render Log History List
       renderLogList(logs);
     }
 
@@ -998,19 +1197,19 @@
       daysData.forEach((day) => {
         const heightPct = Math.max(8, Math.round((day.reps / maxBar) * 100));
         const activeColor = day.reps >= goal
-          ? 'bg-gradient-to-t from-emerald-500 to-cyan-400'
+          ? 'bg-gradient-to-t from-[#FA114F] to-[#92E82A]'
           : day.reps > 0
-          ? 'bg-emerald-500/60'
-          : 'bg-slate-800';
+          ? 'bg-[#92E82A]/75'
+          : 'bg-[#2C2C2E]';
 
         const col = document.createElement('div');
         col.className = 'flex flex-col items-center gap-1.5';
         col.innerHTML = `
-          <div class="text-[10px] font-mono-num font-bold ${day.reps > 0 ? 'text-emerald-400' : 'text-slate-500'}">${day.reps}</div>
-          <div class="w-full h-24 bg-slate-900/90 rounded-xl border border-slate-800/80 p-1 flex items-end">
-            <div class="w-full rounded-lg transition-all duration-500 ${activeColor}" style="height: ${heightPct}%"></div>
+          <div class="text-[10px] tabular-nums font-bold ${day.reps > 0 ? 'text-white' : 'text-[#8E8E93]'}">${day.reps}</div>
+          <div class="w-full h-24 bg-black/60 rounded-[12px] border border-white/5 p-1 flex items-end">
+            <div class="w-full rounded-[8px] transition-all duration-500 ${activeColor}" style="height: ${heightPct}%"></div>
           </div>
-          <div class="text-[10px] font-semibold ${day.isToday ? 'text-white' : 'text-slate-400'}">${day.label}</div>
+          <div class="text-[10px] font-bold ${day.isToday ? 'text-[#92E82A]' : 'text-[#8E8E93]'}">${day.label}</div>
         `;
         container.appendChild(col);
       });
@@ -1022,8 +1221,8 @@
 
       if (logs.length === 0) {
         listEl.innerHTML = `
-          <div class="text-center py-8 text-xs text-slate-500">
-            No sets logged yet. Start the detector or click +1 Rep to log your first set!
+          <div class="text-center py-8 text-xs text-[#8E8E93]">
+            No workouts logged yet. Complete a set to close your rings!
           </div>
         `;
         return;
@@ -1035,25 +1234,25 @@
           ' • ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         const row = document.createElement('div');
-        row.className = 'p-3.5 rounded-2xl bg-slate-900/85 border border-slate-800/90 flex items-center justify-between gap-3 hover:border-slate-700 transition';
+        row.className = 'p-3.5 rounded-[18px] bg-[#2C2C2E]/70 border border-white/5 flex items-center justify-between gap-3';
         row.innerHTML = `
           <div class="flex items-center gap-3">
-            <div class="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col items-center justify-center font-mono-num">
-              <span class="text-sm font-black text-emerald-400 leading-none">${item.reps}</span>
-              <span class="text-[9px] uppercase text-emerald-300/70">Reps</span>
+            <div class="w-12 h-12 rounded-[14px] bg-[#92E82A]/15 border border-[#92E82A]/30 flex flex-col items-center justify-center tabular-nums">
+              <span class="text-base font-black text-[#92E82A] leading-none">${item.reps}</span>
+              <span class="text-[9px] font-bold uppercase text-[#92E82A]/80 mt-0.5">Reps</span>
             </div>
             <div>
-              <div class="text-xs font-bold text-white">${item.note}</div>
-              <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+              <div class="text-xs sm:text-sm font-bold text-white">${item.note}</div>
+              <div class="text-[11px] text-[#8E8E93] flex items-center gap-2 mt-0.5 tabular-nums">
                 <span>${timeStr}</span>
                 <span>•</span>
-                <span class="text-cyan-400 font-mono-num">${item.formScore}% Form</span>
+                <span class="text-[#00F5EA] font-semibold">${item.formScore}% Form</span>
                 <span>•</span>
-                <span class="font-mono-num">${item.calories} kcal</span>
+                <span class="text-[#FA114F] font-semibold">${item.calories} kcal</span>
               </div>
             </div>
           </div>
-          <button onclick="deleteLogItem('${item.id}')" class="p-1.5 text-slate-500 hover:text-rose-400 transition" title="Delete entry">
+          <button onclick="deleteLogItem('${item.id}')" class="ios-btn w-11 h-11 rounded-full text-[#8E8E93] hover:text-[#FF453A] flex items-center justify-center" title="Delete Entry" aria-label="Delete Entry">
             <i data-lucide="trash-2" class="w-4 h-4"></i>
           </button>
         `;
@@ -1064,20 +1263,21 @@
     }
 
     function deleteLogItem(id) {
+      triggerHaptic(15);
       const logs = getWorkoutLogs().filter((item) => item.id !== id);
       localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify(logs));
       renderDashboard();
     }
 
     function clearAllLogs() {
-      if (!confirm('Clear all workout logs and reset your streak?')) return;
+      if (!confirm('Clear all workout sessions and reset your Activity Rings?')) return;
       localStorage.setItem(STORAGE_KEY_LOGS, JSON.stringify([]));
       renderDashboard();
     }
 
     function exportLogsCSV() {
       const logs = getWorkoutLogs();
-      if (!logs.length) return alert('No logs to export.');
+      if (!logs.length) return showToast('No logs to export');
       const headers = ['Date', 'Timestamp', 'Reps', 'Duration(s)', 'Calories(kcal)', 'FormScore(%)', 'Note'];
       const rows = logs.map((l) => [
         l.dateKey,
@@ -1091,16 +1291,51 @@
       const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
       const link = document.createElement('a');
       link.setAttribute('href', encodeURI(csvContent));
-      link.setAttribute('download', `pushpro_workout_logs_${getLocalDateKey()}.csv`);
+      link.setAttribute('download', `pushpro_fitness_logs_${getLocalDateKey()}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
 
     /**************************************************************
-     * 8. GOAL MODAL HANDLERS & INITIALIZATION
+     * 8. SHARE SHEET & GOAL MODAL
      **************************************************************/
+    function showToast(msg) {
+      const toast = document.getElementById('shareToast');
+      document.getElementById('shareToastText').textContent = msg;
+      toast.classList.replace('hidden', 'flex');
+      setTimeout(() => {
+        toast.classList.replace('flex', 'hidden');
+      }, 2800);
+    }
+
+    async function shareAppWithFriend() {
+      triggerHaptic(15);
+      const streak = document.getElementById('headerStreak').textContent || '0';
+      const total = document.getElementById('statTotalReps').textContent || '0';
+      const shareData = {
+        title: 'PushPro AI — Apple Fitness+ Push-Up Tracker',
+        text: `🔥 I'm on a ${streak}-day push-up streak (${total} total reps) on PushPro AI! Try the live camera detector:`,
+        url: window.location.href
+      };
+
+      if (navigator.share && window.location.protocol.startsWith('http')) {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (err) {}
+      }
+
+      try {
+        await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+        showToast('Workout summary & link copied!');
+      } catch (e) {
+        prompt('Copy this link to share with your friend:', window.location.href);
+      }
+    }
+
     function openGoalModal() {
+      triggerHaptic(12);
       document.getElementById('goalInput').value = getDailyGoal();
       document.getElementById('goalModal').classList.remove('hidden');
     }
@@ -1110,6 +1345,7 @@
     }
 
     function saveDailyGoal() {
+      triggerHaptic(20);
       const val = Math.max(5, parseInt(document.getElementById('goalInput').value || '50', 10));
       localStorage.setItem(STORAGE_KEY_GOAL, String(val));
       closeGoalModal();
@@ -1119,6 +1355,9 @@
     window.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
       renderDashboard();
+      if (window.innerWidth < 1024) {
+        switchMobileTab('workout');
+      }
     });
   </script>
 </body>
